@@ -1,0 +1,29 @@
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+backend/.legacy-session
+.local-cleanup-archive/
+
+# Dependencies and build output
+.venv/
+node_modules/
+dist/
+__pycache__/
+*.py[cod]
+*.tsbuildinfo
+.pytest_cache/
+.ruff_cache/
+
+# Local data and operating-system files
+*.sqlite*
+*.db
+*.dump
+*.sql.gz
+backups/
+*.log
+.DS_Store
