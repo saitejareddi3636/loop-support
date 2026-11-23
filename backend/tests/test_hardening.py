@@ -60,6 +60,31 @@ class HardeningTests(unittest.TestCase):
         self.assertEqual(float(get_invoice.invoke({'customer_id':c['customer_id'],'invoice_id':'INV-1001'})['amount']),29)
         self.assertIn('error',get_invoice.invoke({'customer_id':c['customer_id'],'invoice_id':'INV-2001'}))
 
+    def test_current_turn_identity_and_owned_invoice_drive_requested_staging(self):
+        from langchain_core.messages import AIMessageChunk,HumanMessage
+        from app.agent.graph import build_graph
+        class Provider:
+            def __init__(self,*args,**kwargs): self.turn=0
+            def bind_tools(self,tools): return self
+            async def astream(self,messages):
+                self.turn+=1
+                if self.turn==1:
+                    yield AIMessageChunk(content='',tool_call_chunks=[{'name':'verify_customer','args':'{"email":"alex.morgan@example.test"}','id':'verify','index':0}])
+                elif self.turn==2:
+                    assert 'alex.morgan@example.test' in messages[1].content
+                    yield AIMessageChunk(content='',tool_call_chunks=[{'name':'get_invoice','args':'{"invoice_id":"INV-1001"}','id':'invoice','index':0}])
+                else:
+                    yield AIMessageChunk(content='Please confirm the refund.')
+        async def check():
+            with patch('app.agent.graph.ChatGoogleGenerativeAI',Provider):
+                graph=build_graph('test',self.chat,'test')
+                return [e async for e in graph.astream({'messages':[HumanMessage(content='Refund INV-1001 if eligible.')],'results':[],'context':{}},stream_mode='custom')]
+        events=asyncio.run(check())
+        self.assertEqual([e['name'] for e in events if e['type']=='tool_started'],['verify_customer','get_invoice','issue_mock_refund'])
+        self.assertIn('Confirm the invoice and amount',next(e['answer'] for e in events if e['type']=='final_answer'))
+        with connect() as db:
+            self.assertEqual(db.execute('SELECT count(*) AS n FROM refund_receipts WHERE chat_id=%s',(self.chat,)).fetchone()['n'],0)
+
     def test_fresh_chat_and_locked_customer(self):
         storage.add_message(self.chat,'user','Hello')
         second=storage.create_chat(storage.session_id(storage.new_session()))['id']

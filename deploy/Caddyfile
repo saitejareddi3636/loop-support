@@ -1,0 +1,19 @@
+{
+    auto_https off
+    admin localhost:2019
+    servers {
+        protocols h1 h2
+    }
+}
+:8443 {
+    tls /tls/129.80.125.203.sslip.io.crt /tls/129.80.125.203.sslip.io.key
+    @unauthorized not header X-Loopp-Gateway {$LOOPP_GATEWAY_SECRET}
+    respond @unauthorized "Forbidden" 403
+    reverse_proxy api:8000 {
+        flush_interval -1
+        header_up -X-Loopp-Gateway
+        header_up X-Forwarded-Proto https
+        header_up X-Forwarded-For {http.request.header.X-Loopp-Client-IP}
+        header_up -X-Loopp-Client-IP
+    }
+}

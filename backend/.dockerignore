@@ -1,0 +1,10 @@
+*
+!requirements.txt
+!app/**
+!migrations/**
+!migrate.py
+!seed_data.py
+!seed_policies.py
+!policies.json
+**/__pycache__
+**/*.pyc

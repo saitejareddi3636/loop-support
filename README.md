@@ -82,3 +82,6 @@ Run the focused checks from `backend/` with
 and build from `frontend/` with `npm run build`. Database tests create and remove
 a disposable database using the configured PostgreSQL account. Real microphone,
 mute, and interruption behavior require a manual browser check.
+
+Production runs on Cloudflare Pages and an isolated Oracle Compose stack.
+See [deployment operations](deploy/README.md) for the current endpoints and recovery steps.
