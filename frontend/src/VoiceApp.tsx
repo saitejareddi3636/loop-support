@@ -31,6 +31,7 @@ export default function VoiceApp() {
   const [agentAnswer, setAgentAnswer] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [refundReceipts, setRefundReceipts] = useState<Receipt[]>([]);
   const [inputAnalyser, setInputAnalyser] = useState<AnalyserNode | null>(null);
   const [outputAnalyser, setOutputAnalyser] = useState<AnalyserNode | null>(null);
   const [interrupted, setInterrupted] = useState(false);
@@ -66,7 +67,9 @@ export default function VoiceApp() {
     chatIdRef.current = id;
     void fetch(`/api/chats/${id}`).then(async response => {
       if (!response.ok) return;
-      const chat = await response.json() as { messages: { id: number; role: 'user' | 'assistant'; content: string }[] };
+      const chat = await response.json() as { messages: { id: number; role: 'user' | 'assistant'; content: string }[]; refund_receipts?: Receipt[] };
+      setRefundReceipts(chat.refund_receipts || []);
+      setReceipt(chat.refund_receipts?.at(-1) || null);
       setLines(chat.messages.map(message => ({ id: message.id, speaker: message.role, text: message.content })));
       sequenceRef.current = Math.max(0, ...chat.messages.map(message => message.id));
     }).catch(() => { /* Reconnect can still create a fresh chat. */ });
@@ -302,7 +305,11 @@ export default function VoiceApp() {
         addTranscript('assistant', result.message);
         setAgentAnswer(result.message);
       }
-      if (result.receipt_id && result.invoice_id && result.amount_cents !== undefined) setReceipt({ receipt_id: result.receipt_id, invoice_id: result.invoice_id, amount_cents: result.amount_cents, currency: result.currency || 'USD' });
+      if (result.receipt_id && result.invoice_id && result.amount_cents !== undefined) {
+        const issued = { receipt_id: result.receipt_id, invoice_id: result.invoice_id, amount_cents: result.amount_cents, currency: result.currency || 'USD' };
+        setReceipt(issued);
+        setRefundReceipts(current => [...current.filter(item => item.receipt_id !== issued.receipt_id), issued]);
+      }
       setPendingRefund(null);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not confirm the mock refund.'); }
     finally { setConfirming(false); }
@@ -334,7 +341,7 @@ export default function VoiceApp() {
         <div className="voice-rail-scroll" id="voice-details-body" hidden={railCollapsed}>
         <section className="transcript-panel" aria-label="Live transcript"><div className="section-heading"><div><span className="section-kicker">Conversation</span><h2>Live transcript</h2></div><span className="transcript-count">{lines.length ? `${lines.length} messages` : 'Waiting'}</span></div>
           {lines.length === 0 ? <div className="transcript-empty"><span className="transcript-rule" /><p>Your words and Loopp’s responses will appear here.</p></div> : <div className="transcript-lines" aria-live="polite">{lines.map(line => <div key={line.id} className={`transcript-line ${line.speaker}`}><span className="transcript-speaker">{line.speaker === 'user' ? 'You' : 'Loopp'}</span><p>{line.text}</p></div>)}</div>}</section>
-        <ActivityPanel tools={tools} events={events} compact />
+        <ActivityPanel tools={tools} events={events} receipts={refundReceipts} compact />
         {(pendingRefund || receipt) && <RefundCard pending={pendingRefund} receipt={receipt} busy={confirming} onConfirm={() => void confirmRefund()} />}
         {agentAnswer && !lines.some(line => line.speaker === 'assistant' && line.text.includes(agentAnswer.slice(0, 20))) && <div className="agent-answer"><span className="section-kicker">Checked answer</span><Markdown>{agentAnswer}</Markdown></div>}
         </div>

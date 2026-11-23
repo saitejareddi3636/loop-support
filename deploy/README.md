@@ -58,13 +58,14 @@ client bundles, URLs, screenshots, or commits. Keep HTTPS and origin checks enab
 
 ## Checks and demonstration data
 
-28 focused tests and the React production build pass. Public API checks cover
+29 focused tests and the React production build pass. Public API checks cover
 SSE, real tools, active policy citations, cookies/isolation, and fresh chats.
-A browser confirmation issued the fictional INV-3001 receipt; a repeated request
-must return that receipt. INV-3002 was staged only. INV-3005 ($89 USD) remains
-paid and unused for `sam.patel@example.test`, subject to normal date/eligibility
-checks. Seed dates are fixed at November 21, 2026; the Business window is 14 days.
-Local demo receipts were not copied to the new production database.
+Public browser confirmations have issued receipts for INV-3001 and INV-3005.
+Do not reset those receipts to reuse them. Ask `sam.patel@example.test` to list
+currently eligible invoices; eligibility and receipts are checked from the live
+database. Each refund requires an explicit invoice choice when several qualify,
+then its own confirmation click. Seed dates are fixed at November 21, 2026;
+the Business window is 14 days. Local demo receipts were not copied to production.
 
 Public WSS checks verify Gemini Live native audio, agent tool routing, reconnect,
 and shared history using synthetic text input. Physical microphone input,

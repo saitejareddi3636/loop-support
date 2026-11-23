@@ -23,6 +23,7 @@ export default function ChatApp() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const [refundReceipts, setRefundReceipts] = useState<Receipt[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
   const mobileActivityRef = useRef<HTMLDetailsElement>(null);
   const nextId = useRef(-1);
@@ -47,14 +48,15 @@ export default function ChatApp() {
     if (busy) return;
     setBusy(true);
     try {
-      const chat = await request<Chat & { messages: Message[] }>(`/api/chats/${id}`);
+      const chat = await request<Chat & { messages: Message[]; refund_receipts?: Receipt[] }>(`/api/chats/${id}`);
       setChatId(chat.id);
       setMessages(chat.messages);
       setTools([]);
       setEvents([]);
       const traces = await request<{ events: TraceEvent[] }[]>(`/api/chats/${id}/traces`);
       if (traces[0]) { setEvents(traces[0].events); setTools(restoreTools(traces[0].events)); }
-      setReceipt(null);
+      setRefundReceipts(chat.refund_receipts || []);
+      setReceipt(chat.refund_receipts?.at(-1) || null);
       try { setPendingRefund(await request<PendingRefund | null>(`/api/chats/${id}/refund-pending`)); }
       catch { setPendingRefund(null); }
       setError('');
@@ -75,6 +77,7 @@ export default function ChatApp() {
       setEvents([]);
       setPendingRefund(null);
       setReceipt(null);
+      setRefundReceipts([]);
       setError('');
       localStorage.setItem('loopp-chat-id', chat.id);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not start a chat.'); }
@@ -162,7 +165,11 @@ export default function ChatApp() {
         body: JSON.stringify({ token: pendingRefund.token, invoice_id: pendingRefund.invoice_id, amount_cents: pendingRefund.amount_cents }),
       });
       if (result.message) setMessages(current => [...current, { id: nextId.current--, role: 'assistant', content: result.message! }]);
-      if (result.receipt_id && result.invoice_id && result.amount_cents !== undefined) setReceipt({ receipt_id: result.receipt_id, invoice_id: result.invoice_id, amount_cents: result.amount_cents, currency: result.currency || 'USD' });
+      if (result.receipt_id && result.invoice_id && result.amount_cents !== undefined) {
+        const issued = { receipt_id: result.receipt_id, invoice_id: result.invoice_id, amount_cents: result.amount_cents, currency: result.currency || 'USD' };
+        setReceipt(issued);
+        setRefundReceipts(current => [...current.filter(item => item.receipt_id !== issued.receipt_id), issued]);
+      }
       setPendingRefund(null);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not confirm the mock refund.'); }
     finally { setBusy(false); }
@@ -186,11 +193,11 @@ export default function ChatApp() {
           {(pendingRefund || receipt) && <RefundCard pending={pendingRefund} receipt={receipt} busy={busy} onConfirm={() => void confirmRefund()} />}
           <div ref={bottomRef} />
         </div>
-        <details className="mobile-activity" ref={mobileActivityRef}><summary>Agent activity <span>{tools.length ? `${tools.length} actions · ${tools.at(-1)?.status === 'running' ? 'Working' : 'Checked'}` : 'Standing by'}</span></summary><ActivityPanel tools={tools} events={events} compact /></details>
+        <details className="mobile-activity" ref={mobileActivityRef}><summary>Agent activity <span>{tools.length ? `${tools.length} actions · ${tools.at(-1)?.status === 'running' ? 'Working' : 'Checked'}` : 'Standing by'}</span></summary><ActivityPanel tools={tools} events={events} receipts={refundReceipts} compact /></details>
         {error && <div className="chat-error" role="alert"><span>{error}</span><button type="button" onClick={() => chatId ? void openChat(chatId) : window.location.reload()}>Retry</button></div>}
         <form className="chat-composer" onSubmit={send}><div className="composer-frame"><textarea aria-label="Message Loopp" value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder="Ask Loopp anything about your account…" disabled={busy || loading} rows={2} /><div className="composer-bottom"><span>Enter to send · Shift + Enter for a new line</span><button type="submit" disabled={busy || loading || !input.trim()} aria-label="Send message">{busy ? <span className="send-spinner" /> : <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14m-6-6 6 6-6 6"/></svg>}</button></div></div><p className="composer-note">Fictional demo data · Mock financial actions only.</p></form>
       </section>
-      <aside className="chat-rail"><ActivityPanel tools={tools} events={events} /><div className="rail-note"><span className="rail-note-mark">✳</span><p>Loopp checks account records and active policies before it acts.</p></div></aside>
+      <aside className="chat-rail"><ActivityPanel tools={tools} events={events} receipts={refundReceipts} /><div className="rail-note"><span className="rail-note-mark">✳</span><p>Loopp checks account records and active policies before it acts.</p></div></aside>
     </div>
   </main>;
 }

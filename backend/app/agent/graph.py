@@ -66,12 +66,12 @@ def build_graph(api_key,chat_id,trace_id):
                 else:
                     # A personal refund answer requires fresh owned invoice evidence.
                     # If the model omits that read, enforce the dependency before replying.
-                    personal_refund=bool(re.search(r'refund',latest,re.I) and re.search(r'\b(i|my|me|any|eligible|go ahead|give)\b',latest,re.I) and not re.search(r'\b(policy|rules|terms|window)\b',latest,re.I))
+                    personal_refund=bool(re.search(r'refund',latest,re.I) and re.search(r'\b(i|my|me|any|eligible|go ahead|give|is+ue|prepare|stage|process|proceed)\b',latest,re.I) and not re.search(r'\b(policy|rules|terms|window)\b',latest,re.I))
                     invoice_checked=any(r['name']=='issue_mock_refund' or (r['name'] in ('list_invoices','get_invoice') and not r['result'].get('error')) for r in results)
                     if personal_refund and not invoice_checked and state.get('context',{}).get('account'):
                         if delivered:writer({'type':'answer_reset'})
                         return {'messages':[AIMessage(content='',tool_calls=[{'name':'list_invoices','args':{},'id':'required_'+uuid4().hex}])]}
-                    requested_action=bool(re.search(r'go ahead|give.{0,30}refund|(?:prepare|stage).{0,60}\brefund\b|refund\s+(?:it|that|this|INV-)',latest,re.I))
+                    requested_action=bool(re.search(r'go ahead|\bis+ue\b.{0,30}refund|give.{0,30}refund|(?:prepare|stage).{0,60}\brefund\b|refund\s+(?:it|that|this|INV-)',latest,re.I))
                     has_stage=any(r['name']=='issue_mock_refund' for r in results)
                     listed=next((r['result'] for r in reversed(results) if r['name']=='list_invoices'),None)
                     eligible=[item for item in (listed or {}).get('invoices',[]) if item.get('eligible')]

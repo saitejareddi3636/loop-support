@@ -1,5 +1,6 @@
 """Durable PostgreSQL application state. No schema DDL on request paths."""
 import hashlib
+import re
 import secrets
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -33,6 +34,7 @@ def get_chat(chat_id, owner=None):
     with connect() as db:
         chat=db.execute("SELECT id,title,created_at,escalation FROM chats WHERE id=%s"+(" AND session_id=%s" if owner else ""),(chat_id,owner) if owner else (chat_id,)).fetchone()
         if chat:
+            chat["refund_receipts"]=db.execute("SELECT r.receipt_id,r.invoice_id,r.amount_cents,i.currency FROM refund_receipts r JOIN invoices i USING(invoice_id) WHERE r.chat_id=%s ORDER BY r.created_at",(chat_id,)).fetchall()
             chat["messages"]=db.execute("SELECT id,role,content FROM messages WHERE chat_id=%s ORDER BY id",(chat_id,)).fetchall()
         return chat
 
@@ -94,3 +96,13 @@ def conversation_context(chat_id):
     with connect() as db:
         row=db.execute('SELECT context FROM chats WHERE id=%s',(chat_id,)).fetchone()
     return {'account':account,'references':row['context'] if row else {}}
+
+
+def user_invoice_ids(text):
+    return {value.upper() for value in re.findall(r'\bINV-\d+\b',text,re.I)}
+
+
+def remember_invoice_choice(chat_id,query):
+    """Only original user input can establish an explicit invoice selection."""
+    ids=user_invoice_ids(query)
+    if ids:update_context(chat_id,{'user_selected_invoice_id':next(iter(ids)) if len(ids)==1 else None})

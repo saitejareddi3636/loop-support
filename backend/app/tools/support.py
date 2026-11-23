@@ -4,7 +4,7 @@ from app.db import connect
 from app.policy import search
 from app.data import account_by_customer,invoice_by_id
 from app.refunds import create_ticket,stage_refund,eligibility,existing_refund
-from app.storage import set_verified_customer,verified_customer,update_context,conversation_context
+from app.storage import set_verified_customer,verified_customer,update_context,conversation_context,get_chat,user_invoice_ids
 from app.tools.customer import verify_customer as lookup_customer
 
 
@@ -22,7 +22,9 @@ def owned_invoices(chat_id):
         rows=db.execute('SELECT * FROM invoices WHERE customer_id=%s ORDER BY date DESC,invoice_id',(customer_id,)).fetchall()
         items=[invoice_state(chat_id,row,db) for row in rows]
     eligible=[i['invoice_id'] for i in items if i['eligible']]
-    update_context(chat_id,{'listed_invoice_ids':[i['invoice_id'] for i in items],'eligible_invoice_ids':eligible,'selected_invoice_id':eligible[0] if len(eligible)==1 else None})
+    references={'listed_invoice_ids':[i['invoice_id'] for i in items],'eligible_invoice_ids':eligible,'selected_invoice_id':eligible[0] if len(eligible)==1 else None}
+    if len(eligible)>1:references['user_selected_invoice_id']=None
+    update_context(chat_id,references)
     return {'customer_id':customer_id,'invoices':items,'eligible_count':len(eligible),'already_refunded_count':sum(i['refund_status']=='already_refunded' for i in items)}
 
 
@@ -75,17 +77,20 @@ def tools_for_chat(chat_id:str):
     @tool
     def issue_mock_refund(invoice_id:str|None=None)->dict:
         """Stage a requested invoice refund. Omit invoice_id only for a previously selected invoice or one uniquely eligible invoice. Never guess. A separate confirmation click still issues the receipt."""
-        if not invoice_id:
-            context=conversation_context(chat_id)['references']
-            invoice_id=context.get('selected_invoice_id')
-            if not invoice_id:
-                listing=owned_invoices(chat_id)
-                if 'error' in listing:return listing
-                eligible=[i for i in listing['invoices'] if i['eligible']]
-                if not eligible:return {'status':'no_eligible_invoices',**listing}
-                if len(eligible)>1:return {'status':'invoice_choice_required','invoices':eligible,'message':'Which invoice would you like me to check for a mock refund?'}
-                invoice_id=eligible[0]['invoice_id']
-        return stage_refund(chat_id,invoice_id)
+        # A model-supplied argument or a model's invoice lookup is not a user choice.
+        messages=get_chat(chat_id)['messages']
+        latest=next((m['content'] for m in reversed(messages) if m['role']=='user'),'')
+        ids=user_invoice_ids(latest)
+        selected=next(iter(ids)) if len(ids)==1 else None
+        if not ids:selected=conversation_context(chat_id)['references'].get('user_selected_invoice_id')
+        if selected:return stage_refund(chat_id,selected)
+        listing=owned_invoices(chat_id)
+        if 'error' in listing:return listing
+        eligible=[i for i in listing['invoices'] if i['eligible']]
+        if not eligible:return {'status':'no_eligible_invoices',**listing}
+        if len(eligible)>1 or len(ids)>1:
+            return {'status':'invoice_choice_required','invoices':eligible,'message':'Which invoice would you like me to check for a mock refund?'}
+        return stage_refund(chat_id,eligible[0]['invoice_id'])
 
     @tool
     def create_escalation_ticket(category:str,reason:str)->dict:

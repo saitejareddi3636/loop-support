@@ -31,10 +31,14 @@ export function isExistingRefund(result: unknown): boolean {
     ('error' in result && result.error === 'This invoice already has a mock refund receipt.');
 }
 
-function toolCopy(tool: ToolRun): { title: string; detail: string } {
+function toolCopy(tool: ToolRun, receipts: Receipt[]): { title: string; detail: string } {
   if (tool.name === 'issue_mock_refund' && isExistingRefund(tool.result)) return { title: 'Refund already recorded', detail: 'Already refunded · Existing receipt found' };
+  if (tool.name === 'issue_mock_refund' && tool.result && typeof tool.result === 'object' && 'status' in tool.result && tool.result.status === 'invoice_choice_required') return { title: 'Invoice choice needed', detail: 'Choose an invoice to continue' };
   if (tool.status === 'blocked') return { title: tool.name === 'issue_mock_refund' ? 'Refund check needs attention' : 'More information needed', detail: tool.result && typeof tool.result === 'object' && 'error' in tool.result ? String(tool.result.error) : 'Please clarify your request' };
   if (tool.status === 'failed') return { title: `${tool.name.replaceAll('_', ' ')} failed`, detail: 'Failed' };
+  if (tool.name === 'issue_mock_refund' && tool.result && typeof tool.result === 'object' && 'invoice_id' in tool.result && 'amount_cents' in tool.result && receipts.some(receipt => receipt.invoice_id === (tool.result as PendingRefund).invoice_id && receipt.amount_cents === (tool.result as PendingRefund).amount_cents)) {
+    return { title: toolNames.issue_mock_refund, detail: 'Confirmed · Mock receipt issued' };
+  }
   const pending = tool.name === 'issue_mock_refund' && tool.result && typeof tool.result === 'object' && 'status' in tool.result && tool.result.status === 'confirmation_required';
   return { title: toolNames[tool.name] || tool.name.replaceAll('_', ' '), detail: tool.status === 'running' ? 'In progress' : pending ? 'Awaiting your confirmation' : 'Completed' };
 }
@@ -72,7 +76,7 @@ function sourcesFrom(tools: ToolRun[]) {
   });
 }
 
-export function ActivityPanel({ tools, compact = false, events = [] }: { tools: ToolRun[]; compact?: boolean; events?: TraceEvent[] }) {
+export function ActivityPanel({ tools, compact = false, events = [], receipts = [] }: { tools: ToolRun[]; compact?: boolean; events?: TraceEvent[]; receipts?: Receipt[] }) {
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const sources = sourcesFrom(tools);
   const documents = sources.filter((source, index) => sources.findIndex(item => (item.document_id || item.citation) === (source.document_id || source.citation) && item.version === source.version) === index);
@@ -80,7 +84,7 @@ export function ActivityPanel({ tools, compact = false, events = [] }: { tools: 
     <div className="section-heading"><div><span className="section-kicker">Live intelligence</span><h2>Agent activity</h2></div><span className="activity-count">{tools.length ? `${tools.length} actions` : 'Standing by'}</span></div>
     {tools.length ? <ol className="activity-timeline" aria-live="polite">{tools.map(tool => <li key={tool.id} className={tool.status}>
       <span className="timeline-mark" aria-hidden="true">{tool.status === 'blocked' ? '–' : tool.status === 'failed' ? '!' : tool.status === 'done' ? '✓' : ''}</span>
-      <div className="timeline-copy"><strong>{toolCopy(tool).title}</strong><small>{toolCopy(tool).detail}</small></div>
+      <div className="timeline-copy"><strong>{toolCopy(tool, receipts).title}</strong><small>{toolCopy(tool, receipts).detail}</small></div>
       {tool.durationMs !== undefined && <span className="timeline-time">{tool.durationMs < 1000 ? `${tool.durationMs}ms` : `${(tool.durationMs / 1000).toFixed(1)}s`}</span>}
     </li>)}</ol> : <div className="activity-empty"><span className="activity-empty-line" /><p>Actions will appear here as Loopp checks your request.</p></div>}
     {sources.length > 0 && <div className="source-block"><span className="source-label">Policy sources</span><div className="source-list">{documents.map((source, index) => <span className="source-chip" key={`${source.citation}-${index}`} title={`${source.section || source.title || 'Policy'} · ${source.citation} · similarity ${source.similarity}`}><span className="source-dot" />{source.title || source.document_id || source.citation}{source.version ? ` · v${source.version}` : ''}</span>)}</div></div>}
@@ -106,6 +110,6 @@ export function ActivityPanel({ tools, compact = false, events = [] }: { tools: 
 
 export function RefundCard({ pending, receipt, busy, onConfirm }: { pending: PendingRefund | null; receipt: Receipt | null; busy: boolean; onConfirm: () => void }) {
   if (!pending && !receipt) return null;
-  if (receipt) return <div className="refund-card receipt-card"><div className="refund-icon">✓</div><div><span className="refund-overline">Mock receipt issued</span><h3>{receipt.invoice_id}</h3><p>{(receipt.amount_cents / 100).toFixed(2)} {receipt.currency} · No real money moved</p><code>{receipt.receipt_id}</code></div></div>;
+  if (receipt && !pending) return <div className="refund-card receipt-card"><div className="refund-icon">✓</div><div><span className="refund-overline">Mock receipt issued</span><h3>{receipt.invoice_id}</h3><p>{(receipt.amount_cents / 100).toFixed(2)} {receipt.currency} · No real money moved</p><code>{receipt.receipt_id}</code></div></div>;
   return <div className="refund-card"><div className="refund-card-top"><span className="refund-overline">Your confirmation is needed</span><span className="refund-state">Pending</span></div><h3>Confirm this refund</h3><div className="refund-amount"><span>{pending!.invoice_id}</span><strong>{(pending!.amount_cents / 100).toFixed(2)} <small>{pending!.currency}</small></strong></div><p>This is a mock refund. No real money will move.</p><button type="button" className="button-jade" disabled={busy} onClick={onConfirm}>{busy ? 'Confirming…' : 'Confirm invoice and amount'}</button></div>;
 }

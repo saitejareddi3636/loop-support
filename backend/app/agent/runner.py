@@ -7,7 +7,7 @@ import logging
 from uuid import uuid4
 from langchain_core.messages import AIMessage,HumanMessage
 from app.db import connect
-from app.storage import get_chat,add_message,record_trace,offer_escalation,conversation_context
+from app.storage import get_chat,add_message,record_trace,offer_escalation,conversation_context,remember_invoice_choice
 from app.resilience import classify,RetryLater
 from app.agent.graph import build_graph
 from app.agent.conversation import social_reply
@@ -32,6 +32,7 @@ async def run_turn(chat_id,query,api_key,request_id=None):
                 yield {'type':'error','message':'This request was already attempted. Check the saved conversation before starting a new request.','category':'duplicate_request'};return
             db.execute("INSERT INTO turn_requests(chat_id,request_id,status) VALUES (%s,%s,'running')",(chat_id,request_id))
         await asyncio.to_thread(add_message,chat_id,'user',query)
+        await asyncio.to_thread(remember_invoice_choice,chat_id,query)
         history=[HumanMessage(content=m['content']) if m['role']=='user' else AIMessage(content=m['content']) for m in existing['messages'][-40:]]
         context=await asyncio.to_thread(conversation_context,chat_id)
         answer=social_reply(query,existing['messages'],context)

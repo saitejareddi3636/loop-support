@@ -76,6 +76,7 @@ class HardeningTests(unittest.TestCase):
                 else:
                     yield AIMessageChunk(content='Please confirm the refund.')
         async def check(query):
+            storage.add_message(self.chat,'user',query)
             with patch('app.agent.graph.ChatGoogleGenerativeAI',Provider):
                 graph=build_graph('test',self.chat,'test')
                 return [e async for e in graph.astream({'messages':[HumanMessage(content=query)],'results':[],'context':{}},stream_mode='custom')]
@@ -235,22 +236,51 @@ class HardeningTests(unittest.TestCase):
         class Model:
             def bind_tools(self,tools):return self
             async def astream(self,messages):yield AIMessageChunk(content='Generic policy answer must not replace an invoice check.')
-        async def followup():
+        async def followup(query):
             with patch('app.agent.graph.ChatGoogleGenerativeAI',return_value=Model()):
-                return [e async for e in run_turn(other,'Go ahead and give the refund','fake','context-guard')]
-        events=asyncio.run(followup())
-        self.assertTrue(any(e.get('name')=='list_invoices' and e['type']=='tool_completed' for e in events))
-        self.assertIn('Which invoice',next(e['answer'] for e in events if e['type']=='complete'))
+                return [e async for e in run_turn(other,query,'fake','context-guard-'+uuid4().hex)]
+        for query in ['Go ahead and give the refund','isssue the refund']:
+            events=asyncio.run(followup(query))
+            self.assertTrue(any(e.get('name')=='list_invoices' and e['type']=='tool_completed' for e in events))
+            self.assertIn('Which invoice',next(e['answer'] for e in events if e['type']=='complete'))
 
         self.assertTrue(all(i['customer_id']=='cus_1003' for i in listing['invoices']))
         self.assertEqual(tools['issue_mock_refund'].invoke({})['status'],'invoice_choice_required')
         self.assertIsNone(__import__('app.refunds',fromlist=['pending_refund']).pending_refund(other))
+        storage.add_message(other,'user','Please check INV-3002.')
+        storage.remember_invoice_choice(other,'Please check INV-3002.')
         tools['get_invoice'].invoke({'invoice_id':'INV-3002'})
+        storage.add_message(other,'user','Please issue that refund.')
         next_turn={tool.name:tool for tool in tools_for_chat(other)}
         pending=next_turn['issue_mock_refund'].invoke({})
         self.assertEqual(pending['invoice_id'],'INV-3002')
         self.assertEqual(pending['status'],'confirmation_required')
         self.assertIn('error',next_turn['get_invoice'].invoke({'invoice_id':'INV-1001'}))
+
+    def test_model_cannot_choose_between_multiple_eligible_invoices(self):
+        from app.tools.support import tools_for_chat
+        from app.refunds import pending_refund
+        chat=storage.create_chat(storage.session_id(storage.new_session()))['id']
+        storage.set_verified_customer(chat,'cus_1003')
+        tools={t.name:t for t in tools_for_chat(chat)}
+        tools['list_invoices'].invoke({})
+        storage.add_message(chat,'user','isssue the refund')
+        # Even looking up a model-selected invoice must not establish user consent.
+        tools['get_invoice'].invoke({'invoice_id':'INV-3005'})
+        result=tools['issue_mock_refund'].invoke({'invoice_id':'INV-3005'})
+        self.assertEqual(result['status'],'invoice_choice_required')
+        self.assertIsNone(pending_refund(chat))
+        storage.add_message(chat,'user','Please refund INV-3002.')
+        storage.remember_invoice_choice(chat,'Please refund INV-3002.')
+        result=tools['issue_mock_refund'].invoke({'invoice_id':'INV-3005'})
+        self.assertEqual(result['invoice_id'],'INV-3002')
+        receipt=confirm_refund(chat,result['token'],'INV-3002',6900)
+        saved=storage.get_chat(chat)['refund_receipts']
+        self.assertEqual(saved[-1]['receipt_id'],receipt['receipt_id'])
+        self.assertEqual(saved[-1]['invoice_id'],'INV-3002')
+        self.assertIsNone(pending_refund(chat))
+        # Leave the shared test fixture's other cases unchanged.
+        with connect() as db:db.execute('DELETE FROM refund_receipts WHERE chat_id=%s',(chat,))
 
     def test_successful_billing_ticket_is_persisted_and_reported(self):
         from app.agent.runner import run_turn
