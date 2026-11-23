@@ -75,13 +75,15 @@ class HardeningTests(unittest.TestCase):
                     yield AIMessageChunk(content='',tool_call_chunks=[{'name':'get_invoice','args':'{"invoice_id":"INV-1001"}','id':'invoice','index':0}])
                 else:
                     yield AIMessageChunk(content='Please confirm the refund.')
-        async def check():
+        async def check(query):
             with patch('app.agent.graph.ChatGoogleGenerativeAI',Provider):
                 graph=build_graph('test',self.chat,'test')
-                return [e async for e in graph.astream({'messages':[HumanMessage(content='Refund INV-1001 if eligible.')],'results':[],'context':{}},stream_mode='custom')]
-        events=asyncio.run(check())
-        self.assertEqual([e['name'] for e in events if e['type']=='tool_started'],['verify_customer','get_invoice','issue_mock_refund'])
-        self.assertIn('Confirm the invoice and amount',next(e['answer'] for e in events if e['type']=='final_answer'))
+                return [e async for e in graph.astream({'messages':[HumanMessage(content=query)],'results':[],'context':{}},stream_mode='custom')]
+        for query in ['Refund INV-1001 if eligible.','Check my invoice INV-1001 and prepare the mock refund confirmation if eligible.']:
+            with self.subTest(query=query):
+                events=asyncio.run(check(query))
+                self.assertEqual([e['name'] for e in events if e['type']=='tool_started'],['verify_customer','get_invoice','issue_mock_refund'])
+                self.assertIn('Confirm the invoice and amount',next(e['answer'] for e in events if e['type']=='final_answer'))
         with connect() as db:
             self.assertEqual(db.execute('SELECT count(*) AS n FROM refund_receipts WHERE chat_id=%s',(self.chat,)).fetchone()['n'],0)
 

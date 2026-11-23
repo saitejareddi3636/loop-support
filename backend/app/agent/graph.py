@@ -71,7 +71,7 @@ def build_graph(api_key,chat_id,trace_id):
                     if personal_refund and not invoice_checked and state.get('context',{}).get('account'):
                         if delivered:writer({'type':'answer_reset'})
                         return {'messages':[AIMessage(content='',tool_calls=[{'name':'list_invoices','args':{},'id':'required_'+uuid4().hex}])]}
-                    requested_action=bool(re.search(r'go ahead|give.{0,30}refund|refund\s+(?:it|that|this|INV-)',latest,re.I))
+                    requested_action=bool(re.search(r'go ahead|give.{0,30}refund|(?:prepare|stage).{0,60}\brefund\b|refund\s+(?:it|that|this|INV-)',latest,re.I))
                     has_stage=any(r['name']=='issue_mock_refund' for r in results)
                     listed=next((r['result'] for r in reversed(results) if r['name']=='list_invoices'),None)
                     eligible=[item for item in (listed or {}).get('invoices',[]) if item.get('eligible')]
