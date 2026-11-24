@@ -98,7 +98,13 @@ group's before/after pass rates, and similarity extrema. The second check uses
 Gemini 3.5 Flash-Lite with a ten-second timeout and no automatic retries. Provider
 failures fail closed but do not count as semantic evaluation successes. In-scope
 passes require GROUNDED; out-of-scope passes require rejection. This conservative
-check can reject valid questions when the retrieved passages are insufficient.
+check can reject valid questions. A second frozen set adds 15 in-scope
+paraphrases and 15 challenging out-of-scope queries; run only those with
+`eval_guardrail.py --new-only`. Cases are never resampled after measurement.
+Timeouts, provider 429s, malformed output, and detected verdict-override
+instructions fail closed with “I couldn't verify that right now” and an
+escalation offer. Only attempted provider calls emit model-completed trace
+events with measured latency and available provider-reported tokens.
 This is a small retrieval check, not a measure of answer correctness. Record
 measured results below; no scores are prefilled.
 
@@ -107,10 +113,12 @@ measured results below; no scores are prefilled.
 | Original in scope | 10 | | |
 | Original out of scope | 10 | | |
 | Held-out out of scope | 10 | | |
+| V2 in scope | 15 | | |
+| V2 out of scope | 15 | | |
 
 ## Tests
 
-The focused suite contains 37 tests, including 19 database checks.
+The focused suite contains 42 tests, including 19 database checks.
 From `backend/`: `RUN_DB_TESTS=1 ../.venv/bin/python -m unittest discover -s tests -v`.
 Database tests create and remove a disposable database; the account needs that privilege.
 Use `RUN_DB_TESTS=0` for non-DB checks without a running database.

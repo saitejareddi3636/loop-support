@@ -369,7 +369,15 @@ def build_graph(api_key, chat_id, trace_id):
                     result.update(retry_later=True, retry_after_seconds=error.retry_after_seconds)
             verification = result.get("relevance_verification") if name == "search_policy" else None
             if verification:
-                writer({"type": "model_completed", "node": "policy_relevance", **verification})
+                writer(
+                    {
+                        "type": "model_completed"
+                        if verification.get("attempted", True)
+                        else "policy_verification",
+                        "node": "policy_relevance",
+                        **verification,
+                    }
+                )
             result.setdefault(
                 "outcome",
                 "error"

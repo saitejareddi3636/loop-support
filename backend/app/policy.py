@@ -10,7 +10,7 @@ from google.genai import types
 from app.config import configured_api_key
 from app.db import connect as db
 from app.resilience import sync_lookup
-from app.policy_relevance import assess_relevance
+from app.policy_relevance import assess_relevance, VERIFICATION_UNAVAILABLE
 
 POLICIES_PATH = Path(__file__).resolve().parents[1] / "policies.json"
 EMBED_MODEL = "gemini-embedding-001"
@@ -286,7 +286,7 @@ def search(query, tier=None):
         reason = (
             "The retrieved passages do not address this request within Loopp support. Please clarify the Loopp policy or issue you need help with."
             if verification.get("verdict") == "NO"
-            else "The additional policy relevance check is unavailable. I cannot ground this answer right now; please try again later."
+            else VERIFICATION_UNAVAILABLE
         )
         result = decision("ESCALATION_REQUIRED", reason, tier, top=top)
     else:
