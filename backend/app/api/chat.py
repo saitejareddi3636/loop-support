@@ -11,7 +11,7 @@ from app.agent.runner import run_turn
 from app.config import configured_api_key
 from app.refunds import confirm_refund, pending_refund
 from app.storage import create_chat, get_chat, list_chats
-from app.security import owner,consume_quota
+from app.security import owner, consume_quota
 from app.db import connect
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ router = APIRouter(prefix="/api/chats")
 
 class ChatInput(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
-    request_id: str = Field(min_length=8,max_length=100)
+    request_id: str = Field(min_length=8, max_length=100)
 
 
 class RefundConfirmation(BaseModel):
@@ -63,15 +63,25 @@ async def send_message(chat_id: str, body: ChatInput, session: str = Depends(own
     prompt = body.message.strip()
     if not prompt:
         raise HTTPException(status_code=422, detail="Message cannot be empty")
+
     async def stream():
         try:
             async for update in run_turn(chat_id, prompt, key, body.request_id):
                 yield event(update)
         except Exception as error:
             logger.exception("Chat stream failed")
-            yield event({"type": "error", "message": "The request could not finish. Your conversation is saved. Please retry with a new request or ask for human support."})
+            yield event(
+                {
+                    "type": "error",
+                    "message": "The request could not finish. Your conversation is saved. Please retry with a new request or ask for human support.",
+                }
+            )
 
-    return StreamingResponse(stream(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return StreamingResponse(
+        stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/{chat_id}/refund-confirmations")
@@ -92,7 +102,10 @@ def pending(chat_id: str, session: str = Depends(owner)):
 
 
 @router.get("/{chat_id}/traces")
-def traces(chat_id:str,session:str=Depends(owner)):
-    if not get_chat(chat_id,session): raise HTTPException(404,"Chat not found")
+def traces(chat_id: str, session: str = Depends(owner)):
+    if not get_chat(chat_id, session):
+        raise HTTPException(404, "Chat not found")
     with connect() as db:
-        return db.execute("SELECT * FROM traces WHERE chat_id=%s ORDER BY created_at DESC LIMIT 20",(chat_id,)).fetchall()
+        return db.execute(
+            "SELECT * FROM traces WHERE chat_id=%s ORDER BY created_at DESC LIMIT 20", (chat_id,)
+        ).fetchall()

@@ -78,7 +78,9 @@ plus 200/minute and 5,000/day globally. Valid browser sessions are reused.
 Agent requests are limited to 12/minute per session. Provider calls attempt up
 to three requests within a 45-second budget; longer Retry-After instructions
 return a retry-later state. The graph budget is 150 seconds and voice sessions
-have a 30-minute cap. Reconnects preserve history. Refund transactions validate
+have a 30-minute cap. Each API worker allows one voice socket per session and
+three globally by default. Voice releases audio on page exit or after two minutes
+in a hidden tab. Reconnects preserve history. Refund transactions validate
 ownership, eligibility, expiration, and exact confirmation; unique persisted
 receipts make refunds idempotent. Mutations are not automatically replayed.
 
@@ -98,7 +100,7 @@ measured results below; no scores are prefilled.
 
 ## Tests
 
-The focused suite contains 30 tests, including 18 database checks.
+The focused suite contains 31 tests, including 19 database checks.
 From `backend/`: `RUN_DB_TESTS=1 ../.venv/bin/python -m unittest discover -s tests -v`.
 Database tests create and remove a disposable database; the account needs that privilege.
 Use `RUN_DB_TESTS=0` for non-DB checks without a running database.
