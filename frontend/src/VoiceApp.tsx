@@ -155,6 +155,36 @@ export default function VoiceApp() {
     void cleanup();
   }
 
+  useEffect(() => {
+    let hiddenTimer: number | undefined;
+    const clearHiddenTimer = () => {
+      if (hiddenTimer !== undefined) window.clearTimeout(hiddenTimer);
+      hiddenTimer = undefined;
+    };
+    const onVisibilityChange = () => {
+      clearHiddenTimer();
+      if (document.hidden && wsRef.current) {
+        hiddenTimer = window.setTimeout(() => {
+          if (!document.hidden || !wsRef.current) return;
+          disconnect();
+          setError('Voice ended because the tab was in the background.');
+        }, 120_000);
+      }
+    };
+    const onPageHide = () => {
+      clearHiddenTimer();
+      disconnect();
+    };
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    onVisibilityChange();
+    return () => {
+      clearHiddenTimer();
+      window.removeEventListener('pagehide', onPageHide);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, []);
+
   async function connect() {
     if (state !== 'disconnected') return;
     const connectionId = ++connectionIdRef.current;

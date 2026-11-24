@@ -249,6 +249,43 @@ class HardeningTests(unittest.TestCase):
                 self.assertEqual(a,b)
         asyncio.run(run());self.assertEqual(len(calls),1)
 
+    def test_voice_socket_limits_release_slots_without_gemini(self):
+        from contextlib import ExitStack
+        from types import SimpleNamespace
+        from app.main import voice_slots
+
+        class FakeLive:
+            async def __aenter__(self): return self
+            async def __aexit__(self, *_): return None
+            async def receive(self):
+                await asyncio.Event().wait()
+                if False: yield None
+
+        class FakeClient:
+            def __init__(self, *_args, **_kwargs):
+                self.aio = SimpleNamespace(live=SimpleNamespace(connect=lambda **_: FakeLive()))
+
+        sessions = [storage.new_session() for _ in range(4)]
+        def connect(client, token):
+            return client.websocket_connect('/api/voice', headers={'cookie': f'loopp_session={token}'})
+
+        with patch.dict(os.environ, {'VOICE_MAX_PER_SESSION':'1', 'VOICE_MAX_GLOBAL':'3'}), \
+             patch('app.main.genai.Client', FakeClient), \
+             patch('app.main.configured_api_key', return_value='fake'):
+            with TestClient(app) as client:
+                with ExitStack() as sockets:
+                    first = sockets.enter_context(connect(client, sessions[0]))
+                    self.assertEqual(first.receive_json()['type'], 'ready')
+                    duplicate = sockets.enter_context(connect(client, sessions[0]))
+                    self.assertEqual(duplicate.receive_json(), {
+                        'type':'error', 'message':'Voice is busy. Please try again in a minute.'
+                    })
+                    for token in sessions[1:3]:
+                        self.assertEqual(sockets.enter_context(connect(client, token)).receive_json()['type'], 'ready')
+                    fourth = sockets.enter_context(connect(client, sessions[3]))
+                    self.assertEqual(fourth.receive_json()['message'], 'Voice is busy. Please try again in a minute.')
+        self.assertEqual(voice_slots.total, 0)
+
     def test_interrupted_tool_persists_failure_without_partial_assistant(self):
         from app.agent.runner import run_turn
         class Graph:

@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 import os
+from threading import Lock
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 
@@ -25,6 +26,37 @@ async def lifespan(_app):
     yield
 
 app = FastAPI(title="Loopp support prototype",lifespan=lifespan)
+
+
+class VoiceSlots:
+    """Bound concurrent Live sockets in this single-worker API process."""
+
+    def __init__(self):
+        self.lock = Lock()
+        self.total = 0
+        self.sessions = {}
+
+    def acquire(self, owner):
+        per_session = max(1, int(os.getenv("VOICE_MAX_PER_SESSION", "1")))
+        global_limit = max(1, int(os.getenv("VOICE_MAX_GLOBAL", "3")))
+        with self.lock:
+            if self.total >= global_limit or self.sessions.get(owner, 0) >= per_session:
+                return False
+            self.total += 1
+            self.sessions[owner] = self.sessions.get(owner, 0) + 1
+            return True
+
+    def release(self, owner):
+        with self.lock:
+            self.total -= 1
+            remaining = self.sessions[owner] - 1
+            if remaining:
+                self.sessions[owner] = remaining
+            else:
+                del self.sessions[owner]
+
+
+voice_slots = VoiceSlots()
 
 @app.middleware('http')
 async def security_headers(request,call_next):
@@ -125,6 +157,18 @@ async def voice(websocket: WebSocket) -> None:
         await websocket.close(code=1008,reason="Demo session expired. Refresh before reconnecting.")
         return
     owner=session_id(token)
+    if not voice_slots.acquire(owner):
+        await websocket.accept()
+        await websocket.send_json({"type":"error","message":"Voice is busy. Please try again in a minute."})
+        await websocket.close(code=1013)
+        return
+    try:
+        await voice_connected(websocket, owner)
+    finally:
+        voice_slots.release(owner)
+
+
+async def voice_connected(websocket: WebSocket, owner: str) -> None:
     await websocket.accept()
     chat_id = websocket.query_params.get("chat_id")
     if chat_id and await asyncio.to_thread(get_chat,chat_id,owner) is None:
