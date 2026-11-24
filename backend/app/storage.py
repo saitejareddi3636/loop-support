@@ -99,7 +99,7 @@ def conversation_context(chat_id):
 
 
 def user_invoice_ids(text):
-    return {value.upper() for value in re.findall(r'\bINV-\d+\b',text,re.I)}
+    return {value.upper() for value in re.findall(r'\bINV-(?:D\d{8}-\d+|\d+)\b',text,re.I)}
 
 
 def remember_invoice_choice(chat_id,query):

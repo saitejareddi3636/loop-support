@@ -3,6 +3,7 @@
 set -eu
 cd /opt/loopp-support
 umask 077
+docker compose --env-file .env.production -f compose.production.yaml -p loopp-support exec -T api python refresh_demo.py
 mkdir -p backups
 docker compose --env-file .env.production -f compose.production.yaml -p loopp-support exec -T proxy caddy reload --config /etc/caddy/Caddyfile --force
 stamp=$(date -u +%Y%m%dT%H%M%SZ)

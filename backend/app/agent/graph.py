@@ -16,7 +16,7 @@ from app.agent.answers import refund_reply,invoice_list_reply
 from app.policy import grounded_answer,validate_evidence,decision
 from app.resilience import classify,retry_delay,RetryLater
 from app.metrics import text_cost,PRICING_SOURCE
-from app.storage import offer_escalation,verified_customer,conversation_context
+from app.storage import offer_escalation,verified_customer,conversation_context,user_invoice_ids
 from app.data import account_by_customer
 
 SYSTEM_PROMPT="""You are Loopp, a warm, concise support assistant for a fictional demo.
@@ -77,7 +77,7 @@ def build_graph(api_key,chat_id,trace_id):
                     eligible=[item for item in (listed or {}).get('invoices',[]) if item.get('eligible')]
                     if not listed:
                         invoice=next((r['result'] for r in reversed(results) if r['name']=='get_invoice' and not r['result'].get('error')),None)
-                        requested_ids={value.upper() for value in re.findall(r'\bINV-\d+\b',latest,re.I)}
+                        requested_ids=user_invoice_ids(latest)
                         eligible=[invoice] if invoice and invoice.get('eligible') and (not requested_ids or invoice['invoice_id'] in requested_ids) else []
                     if requested_action and not has_stage and len(eligible)==1:
                         if delivered:writer({'type':'answer_reset'})

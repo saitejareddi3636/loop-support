@@ -5,7 +5,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt && useradd --uid 10001 --create-home loopp
 COPY --chown=loopp:loopp app ./app
 COPY --chown=loopp:loopp migrations ./migrations
-COPY --chown=loopp:loopp migrate.py seed_data.py seed_policies.py policies.json ./
+COPY --chown=loopp:loopp migrate.py seed_data.py seed_policies.py refresh_demo.py eval_guardrail.py policies.json ./
 USER loopp
 EXPOSE 8000
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips", "*"]

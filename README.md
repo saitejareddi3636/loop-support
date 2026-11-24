@@ -1,49 +1,38 @@
 # Loopp
+[Live demo](https://loopp-support.pages.dev)
 
-Loopp is a customer-support demo with text chat and live voice.
-Both interfaces use the same LangGraph workflow, conversation history,
-policy retrieval, and backend tools. Customer records and policies are fictional.
-Refunds create mock receipts; no money moves. Email lookup is not authentication.
+Loopp is a fictional customer-support demo with streaming text chat and native
+voice. Both modes share a LangGraph agent, conversation history, tools, and
+policy retrieval. Refunds create mock receipts; no money moves. Email lookup
+is demo identity resolution, not real authentication.
 
 ## Architecture
 
-- React and TypeScript provide chat, voice controls, transcripts, and tool activity.
-- FastAPI streams chat over SSE and bridges browser audio to Gemini Live over WebSockets.
-- Gemini Live handles native speech; Gemini 3.5 Flash-Lite drives the text agent.
-- LangGraph selects account, invoice, policy, refund, and escalation tools.
-- PostgreSQL stores application state and billing records; pgvector stores policies.
-
-API routes, agent orchestration, tools, and retrieval are separate backend modules.
-Voice and text share a session. Refund ownership, eligibility, confirmation, and
-idempotency are enforced by backend code, independently of model output.
+React and TypeScript provide the UI. FastAPI streams chat over SSE and bridges
+browser audio to Gemini Live over WebSockets. Gemini 3.5 Flash-Lite drives
+LangGraph; PostgreSQL stores sessions, invoices, receipts, and tickets, with
+pgvector for policy retrieval. API routes, orchestration, and tools are separate.
+Gemini 3.5 Flash-Lite replaced 2.5 Flash-Lite because 2.5 was unavailable to this API project.
 
 ## Retrieval and trade-offs
 
-The knowledge base contains 15 versioned support documents. The section-aware
-splitter preserves headings and paragraph boundaries, targets roughly 180–300
-estimated tokens, and overlaps complete sentences where practical. Token sizes
-use a character-based estimate rather than a model tokenizer; some chunks fall
-outside the target range to avoid tiny fragments. Stable content hashes let
-unchanged chunks reuse their embeddings.
+The corpus has 15 versioned documents and 30 chunks. Section-aware chunking
+preserves headings and paragraphs, targets roughly 180–300 estimated tokens,
+and overlaps complete sentences. Character-based estimates avoid a tokenizer
+dependency; some chunks exceed the target to avoid small fragments. Content
+hashes let unchanged chunks reuse their 768-dimensional Gemini embeddings.
 
-Gemini embeddings use 768 dimensions. Search filters by active version, effective
-and expiration dates, and subscription tier before ranking the top four matches
-by cosine similarity. Results below 0.68 are rejected. This threshold measures
-retrieval relevance, not the probability that an answer is correct.
-
-The corpus has 30 chunks, so retrieval uses an exact vector scan rather than an
-approximate index. Policy answers select cited source sentences and revalidate
-their text and metadata. This limits unsupported paraphrasing at the cost of
-less flexible answers. Account and invoice facts come from database queries,
-not vector search. Reported API costs cover text calls only; missing audio and
-embedding costs are shown as unavailable.
+Search filters active versions, effective dates, and subscription tier, then
+ranks four matches using exact cosine search. The corpus is too small to need
+an approximate index. The threshold stays **0.68** and measures relevance,
+not answer correctness. Cited policy sentences are revalidated against sources;
+this restricts paraphrasing. Invoice facts come from SQL, not vector search.
+API cost reporting is a text-only estimate; missing costs remain unavailable.
 
 ## Local setup
 
-Requirements: Python 3.11+, Node 20+, Docker Compose, and a Gemini API key with
-access to the configured text, embedding, and Live models.
-
-From the repository root:
+Requires Python 3.11+, Node 20+, Docker Compose, and access to the configured
+Gemini text, Live, and embedding models. From the repository root:
 
 ```sh
 cp .env.example .env
@@ -51,10 +40,7 @@ python3 -m venv .venv
 .venv/bin/pip install -r backend/requirements.txt
 ```
 
-Edit `.env`: set `GEMINI_API_KEY` and replace the database password in both
-`POSTGRES_PASSWORD` and `DATABASE_URL`. Keep this file local.
-
-Start the database and backend:
+Set `GEMINI_API_KEY` and matching database passwords in `.env`; keep it local.
 
 ```sh
 docker compose up -d db
@@ -62,26 +48,60 @@ cd backend
 ../.venv/bin/python migrate.py
 ../.venv/bin/python seed_data.py
 ../.venv/bin/python seed_policies.py
+../.venv/bin/python refresh_demo.py
 ../.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
-In another terminal, from the repository root:
+In another terminal: `cd frontend && npm ci && npm run dev`.
+Open http://127.0.0.1:5173. Microphone capture requires localhost or HTTPS.
+Deployment commands and backup details are in [deploy/README.md](deploy/README.md).
 
-```sh
-cd frontend
-npm ci
-npm run dev
-```
+## Try this
 
-Open http://127.0.0.1:5173. Allow microphone access for voice; use localhost or HTTPS.
-Try `sam.patel@example.test` and ask which invoices qualify for a mock refund.
-The deterministic seed dates are fixed; eligibility uses the current server date.
+1. Start a new conversation: “I'm sam.patel@example.test. Check my account.”
+2. Ask: “Which invoices are eligible for a mock refund?”
+3. Name an invoice from the returned list, then click **Confirm invoice and amount**.
+4. Ask about the Business monthly refund policy and inspect its citations.
+5. Switch to Voice to continue the same conversation; allow microphone access.
 
-Run the focused checks from `backend/` with
-`RUN_DB_TESTS=1 ../.venv/bin/python -m unittest discover -s tests -v`,
-and build from `frontend/` with `npm run build`. Database tests create and remove
-a disposable database using the configured PostgreSQL account. Real microphone,
-mute, and interruption behavior require a manual browser check.
+`refresh_demo.py` adds today's paid demo invoices for Sam and Alex (`alex.morgan@example.test`).
+IDs are `INV-D<YYYYMMDD>-1` and `-2`. Runs are insert-only and idempotent;
+existing invoices and receipts are never reset. The six-hour maintenance job
+runs it. Eligibility still uses current account state and refund rules.
+Refund confirmation remains a separate server endpoint called by the UI button.
+Spoken agreement does not issue a refund.
 
-Production runs on Cloudflare Pages and an isolated Oracle Compose stack.
-See [deployment operations](deploy/README.md) for the current endpoints and recovery steps.
+## Rate limits and failure handling
+
+Production defaults limit new sessions to 10/minute and 100/day per network peer,
+plus 200/minute and 5,000/day globally. Valid browser sessions are reused.
+Agent requests are limited to 12/minute per session. Provider calls attempt up
+to three requests within a 45-second budget; longer Retry-After instructions
+return a retry-later state. The graph budget is 150 seconds and voice sessions
+have a 30-minute cap. Reconnects preserve history. Refund transactions validate
+ownership, eligibility, expiration, and exact confirmation; unique persisted
+receipts make refunds idempotent. Mutations are not automatically replayed.
+
+## Guardrail evaluation
+
+From `backend/`, run `../.venv/bin/python eval_guardrail.py` after seeding policies.
+It sends 10 in-scope and 10 out-of-scope queries through `app.policy.search`
+with real embeddings, printing similarity, threshold, decision, and group pass
+rates. In-scope passes require GROUNDED; out-of-scope passes require rejection.
+This is a small retrieval check, not a measure of answer correctness. Record
+measured results below; no scores are prefilled.
+
+| Group | Queries | Passed | Pass rate |
+| --- | --- | --- | --- |
+| In scope | 10 | | |
+| Out of scope | 10 | | |
+
+## Tests
+
+The focused suite contains 30 tests, including 18 database checks.
+From `backend/`: `RUN_DB_TESTS=1 ../.venv/bin/python -m unittest discover -s tests -v`.
+Database tests create and remove a disposable database; the account needs that privilege.
+Use `RUN_DB_TESTS=0` for non-DB checks without a running database.
+From `frontend/`: `npm run build`.
+Physical microphone capture, playback, mute, and interruption require a manual browser check;
+automated checks do not establish that those behaviors work.

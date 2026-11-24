@@ -88,6 +88,53 @@ class HardeningTests(unittest.TestCase):
         with connect() as db:
             self.assertEqual(db.execute('SELECT count(*) AS n FROM refund_receipts WHERE chat_id=%s',(self.chat,)).fetchone()['n'],0)
 
+    def test_daily_demo_refresh_is_insert_only_idempotent_and_excludes_refunds(self):
+        from refresh_demo import refresh
+        from app.refunds import eligibility
+        from app.tools.support import tools_for_chat
+        class Today(date):
+            @classmethod
+            def today(cls):return cls(2026,11,23)
+        with connect() as db:
+            original=db.execute('SELECT * FROM invoices ORDER BY invoice_id').fetchall()
+            receipts=db.execute('SELECT * FROM refund_receipts ORDER BY receipt_id').fetchall()
+        created_ids=[value for value in ['INV-D20261123-1','INV-D20261123-2'] if value not in {r['invoice_id'] for r in original}]
+        def clean_fixtures():
+            with connect() as db:
+                db.execute('DELETE FROM refund_pending WHERE invoice_id=ANY(%s)',(created_ids,))
+                db.execute('DELETE FROM refund_receipts WHERE invoice_id=ANY(%s)',(created_ids,))
+                db.execute('DELETE FROM invoices WHERE invoice_id=ANY(%s)',(created_ids,))
+        self.addCleanup(clean_fixtures)
+        with patch('refresh_demo.date',Today),patch('app.refunds.date',Today):
+            first=refresh();second=refresh()
+            self.assertEqual(first['inserted'],['INV-D20261123-1','INV-D20261123-2'])
+            self.assertEqual(second['inserted'],[])
+            self.assertEqual(second['available'],first['inserted'])
+            with connect() as db:
+                self.assertEqual(db.execute('SELECT * FROM invoices WHERE invoice_id=ANY(%s) ORDER BY invoice_id',([r['invoice_id'] for r in original],)).fetchall(),original)
+                self.assertEqual(db.execute('SELECT * FROM refund_receipts ORDER BY receipt_id').fetchall(),receipts)
+                self.assertEqual(db.execute('SELECT date FROM invoices WHERE invoice_id=%s',(first['inserted'][0],)).fetchone()['date'],Today.today())
+            sam=storage.create_chat(storage.session_id(storage.new_session()))['id']
+            storage.set_verified_customer(sam,'cus_1003')
+            for chat,invoice in [(sam,first['inserted'][0]),(self.chat,first['inserted'][1])]:
+                with connect() as db:self.assertNotIn('error',eligibility(chat,invoice,db))
+            storage.add_message(sam,'user','Please refund INV-D20261123-1.')
+            storage.remember_invoice_choice(sam,'Please refund INV-D20261123-1.')
+            tools={t.name:t for t in tools_for_chat(sam)}
+            pending=tools['issue_mock_refund'].invoke({'invoice_id':first['inserted'][0]})
+            receipt=confirm_refund(sam,pending['token'],pending['invoice_id'],pending['amount_cents'])
+            self.assertIn('receipt_id',receipt)
+            third=refresh()
+            self.assertEqual(third['inserted'],[])
+            self.assertEqual(third['available'],['INV-D20261123-2'])
+            with connect() as db:
+                # A pre-existing refunded status must never be reset to paid either.
+                db.execute("UPDATE invoices SET status='refunded' WHERE invoice_id='INV-D20261123-2'")
+            self.assertEqual(refresh()['available'],[])
+            with connect() as db:
+                self.assertEqual(db.execute('SELECT receipt_id FROM refund_receipts WHERE invoice_id=%s',(pending['invoice_id'],)).fetchone()['receipt_id'],receipt['receipt_id'])
+                self.assertEqual(db.execute("SELECT status FROM invoices WHERE invoice_id='INV-D20261123-2'").fetchone()['status'],'refunded')
+
     def test_fresh_chat_and_locked_customer(self):
         storage.add_message(self.chat,'user','Hello')
         second=storage.create_chat(storage.session_id(storage.new_session()))['id']
@@ -376,7 +423,7 @@ class GraphRecoveryTests(unittest.IsolatedAsyncioTestCase):
                 if self.calls==1:
                     yield AIMessageChunk(content='',tool_calls=[{'name':'get_invoice','args':{'customer_id':'cus_1001','invoice_id':'INV-1002'},'id':'test-call'}])
                 else:yield AIMessageChunk(content='This must not become a fabricated invoice answer.')
-        with patch('app.agent.graph.ChatGoogleGenerativeAI',return_value=Model()),patch('app.agent.graph.offer_escalation',return_value={'status':'eligible'}),patch.dict(os.environ,{'APP_ENV':'local','DEMO_FAIL_TOOL':'get_invoice'}):
+        with patch('app.agent.graph.ChatGoogleGenerativeAI',return_value=Model()),patch('app.agent.graph.offer_escalation',return_value={'status':'eligible'}),patch('app.agent.graph.conversation_context',return_value={'account':None,'references':{}}),patch.dict(os.environ,{'APP_ENV':'local','DEMO_FAIL_TOOL':'get_invoice'}):
             events=[event async for event in build_graph('fake','not-persisted','trace').astream({'messages':[HumanMessage('Find the invoice')],'results':[]},stream_mode='custom')]
         self.assertTrue(any(e['type']=='tool_failed' for e in events))
         self.assertFalse(any(e['type']=='tool_completed' for e in events))

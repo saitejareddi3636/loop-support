@@ -5,6 +5,8 @@
 !migrate.py
 !seed_data.py
 !seed_policies.py
+!refresh_demo.py
+!eval_guardrail.py
 !policies.json
 **/__pycache__
 **/*.pyc

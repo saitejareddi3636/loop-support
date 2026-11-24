@@ -334,7 +334,7 @@ export default function VoiceApp() {
           {state === 'disconnected' ? <button type="button" className="connect-button" onClick={() => void connect()}><span className="connect-icon" aria-hidden="true">◉</span>Start voice conversation</button> : <button type="button" className="control-button end-control" onClick={disconnect} aria-label={state === 'connecting' ? 'Cancel connection' : 'End call'}><span className="control-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 5l14 14M19 5 5 19"/></svg></span><span>{state === 'connecting' ? 'Cancel' : 'End call'}</span></button>}
         </div>
         {error && <div className="voice-error" role="alert"><span>{error}</span>{state === 'disconnected' && <button type="button" onClick={() => void connect()}>Reconnect</button>}</div>}
-        <p className="stage-footnote">Your voice and chat stay in the same conversation.</p>
+        <p className="stage-footnote">{pendingRefund ? 'Use the Confirm invoice and amount button in the conversation panel. Spoken confirmation cannot issue a refund.' : 'Your voice and chat stay in the same conversation.'}</p>
       </section>
       <aside className={`voice-rail ${railCollapsed ? 'is-collapsed' : ''}`} aria-label="Conversation details">
         <div className="voice-rail-heading"><span>Conversation details</span><button type="button" aria-label={railCollapsed ? 'Show conversation details' : 'Minimize conversation details'} aria-expanded={!railCollapsed} aria-controls="voice-details-body" title={railCollapsed ? 'Show details' : 'Minimize details'} onClick={() => setRailCollapsed(value => !value)}>{railCollapsed ? '‹' : '›'}</button></div>
