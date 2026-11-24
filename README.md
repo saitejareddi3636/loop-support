@@ -1,42 +1,101 @@
 # Loopp
-[Live demo](https://loopp-support.pages.dev)
 
-Loopp is a fictional customer-support demo with streaming text chat and native
-voice. Both modes share a LangGraph agent, conversation history, tools, and
-policy retrieval. Refunds create mock receipts; no money moves. Email lookup
-is demo identity resolution, not real authentication.
+A fictional customer-support agent with streaming chat, live voice, policy retrieval, and mock refunds.
+
+Live URL: [https://loopp-support.pages.dev](https://loopp-support.pages.dev)
+
+Demo account: sam.patel@example.test
+
+<!-- TODO: Loom link -->
+<!-- TODO: screenshot -->
+
+## Try this
+
+1. Start a conversation: “I'm sam.patel@example.test. List my eligible refunds.”
+2. Choose an invoice from the returned list: “Prepare a mock refund for [invoice ID].”
+3. Check its invoice and amount, then click **Confirm invoice and amount**. Spoken agreement does not issue a refund.
+4. Ask: “What is the Business monthly refund policy?” Inspect the policy citations.
+5. Ask an out-of-scope question: “Does Loopp cover a refund for my restaurant meal?”
+6. Switch to Voice, allow microphone access, ask a question, and interrupt while the agent speaks.
 
 ## Architecture
 
-React and TypeScript provide the UI. FastAPI streams chat over SSE and bridges
-browser audio to Gemini Live over WebSockets. Gemini 3.5 Flash-Lite drives
-LangGraph; PostgreSQL stores sessions, invoices, receipts, and tickets, with
-pgvector for policy retrieval. API routes, orchestration, and tools are separate.
-Gemini 3.5 Flash-Lite replaced 2.5 Flash-Lite because 2.5 was unavailable to this API project.
+```mermaid
+flowchart LR
+    B[Browser] --> P[Cloudflare Pages Function]
+    P -->|Gateway secret| C[Caddy]
+    C --> A[FastAPI]
+    A --> L[LangGraph]
+    L --> T[Backend tools]
+    L --> V[PostgreSQL / pgvector]
+    L --> G[Gemini text and embeddings]
+    T --> V
+    B <-->|Voice WebSocket via Pages and Caddy| A
+    A <-->|Native audio WebSocket| GL[Gemini Live]
+```
 
-## Retrieval and trade-offs
+React/TypeScript renders chat and voice. FastAPI streams text over SSE and bridges
+native Gemini Live audio. Both modes share persisted conversations and LangGraph
+tools. The gateway secret stays in Pages/Oracle configuration, outside the browser.
 
-The corpus has 15 versioned documents and 30 chunks. Section-aware chunking
-preserves headings and paragraphs, targets roughly 180–300 estimated tokens,
-and overlaps complete sentences. Character-based estimates avoid a tokenizer
-dependency; some chunks exceed the target to avoid small fragments. Content
-hashes let unchanged chunks reuse their 768-dimensional Gemini embeddings.
+Policy documents use section-aware chunks targeting roughly 180–300 estimated
+tokens with sentence overlap. Content hashes reuse unchanged 768-dimensional
+embeddings. Retrieval filters active versions, dates, and tier before ranking
+four matches; policy citations are revalidated against stored source text.
 
-Search filters active versions, effective dates, and subscription tier, then
-ranks four matches using exact cosine search. The corpus is too small to need
-an approximate index. The threshold stays **0.68** and measures relevance,
-not answer correctness. A second, bounded yes/no model call must also verify
-that the retrieved passages address the actual Loopp request. A negative, malformed,
-or unavailable verdict returns the existing escalation decision without creating
-a ticket. The check cannot promote a below-threshold result or authorize refunds.
-Cited policy sentences are revalidated against sources;
-this restricts paraphrasing. Invoice facts come from SQL, not vector search.
-API cost reporting is a text-only estimate; missing costs remain unavailable.
+## Guardrail evaluation
+
+These tables record real embedding and verifier calls with `RELEVANCE_VERIFIER=on`.
+“Correct” means accepting an in-scope question or rejecting an out-of-scope one;
+it does not measure answer correctness. Counts are shown without rounding.
+The original set was rerun after the ticket-information prompt clarification.
+
+Original 20-query set:
+
+| Group | Queries | Retrieval-only correct | Verified correct |
+| --- | ---: | ---: | ---: |
+| In scope | 10 | 10/10 | 10/10 |
+| Out of scope | 10 | 9/10 | 10/10 |
+
+Frozen 30-query set, written before measurement and not tuned afterwards:
+
+| Group | Queries | Retrieval-only correct | Verified correct |
+| --- | ---: | ---: | ---: |
+| In-scope paraphrases | 15 | 15/15 | 13/15 |
+| Challenging out-of-scope | 15 | 0/15 | 15/15 |
+
+All 30 frozen queries passed the **0.68** retrieval threshold. The maximum
+out-of-scope similarity was **0.789**, above the minimum in-scope similarity of
+**0.690**. The scores overlap: raising a similarity cutoff alone cannot separate
+these sets without rejecting valid questions. The original set's extrema were
+0.743 out of scope and 0.699 in scope.
+
+Two known false rejections remain: the **Pro monthly refund-window** paraphrase
+(0.743) and the **subscription-ending process** question (0.707). The verifier is
+conservative and adds a model call; the held-out results were not used to tune it.
+
+The verifier runs only after retrieval passes. Timeout, 429, malformed output,
+or detected verdict-override instructions fail closed with:
+“I couldn't verify that right now. Would you like a human support ticket?”
+An escalation offer does not create a ticket without consent.
+
+Set **`RELEVANCE_VERIFIER=off`** to disable the additional relevance model.
+This deliberately restores retrieval-only decisions, including their false
+positives. The 0.68 threshold, applicability/citation checks, session isolation,
+and all backend refund/ticket protections remain enabled. The default is `on`.
+
+## Rate limits and failure handling
+
+- New sessions: 10/minute and 100/day per network peer; 200/minute and 5,000/day globally in production. Existing valid browser sessions are reused.
+- Agent requests: 12/minute per session in production; excess requests return 429.
+- Text and embedding lookups retry provider 429s, timeouts, and transient upstream failures up to three attempts within a 45-second budget. Valid `Retry-After` instructions are respected; excessive waits return a retry-later state. State-changing tools are not automatically replayed.
+- Voice: 30-minute cap, one socket per session and three globally per API worker by default. Page exit or two minutes in a hidden tab releases voice resources.
+- Refunds: backend ownership, eligibility, expiration, invoice/amount confirmation, and persisted idempotency checks apply independently of model output.
+- Relevance verification: one bounded ten-second call, no automatic retry; failures return the verification-unavailable message above and offer escalation.
 
 ## Local setup
 
-Requires Python 3.11+, Node 20+, Docker Compose, and access to the configured
-Gemini text, Live, and embedding models. From the repository root:
+Requires Python 3.11+, Node 20+, Docker Compose, and access to the configured Gemini models.
 
 ```sh
 cp .env.example .env
@@ -44,7 +103,7 @@ python3 -m venv .venv
 .venv/bin/pip install -r backend/requirements.txt
 ```
 
-Set `GEMINI_API_KEY` and matching database passwords in `.env`; keep it local.
+Set the Gemini key and matching database passwords in your local `.env`, then:
 
 ```sh
 docker compose up -d db
@@ -57,71 +116,47 @@ cd backend
 ```
 
 In another terminal: `cd frontend && npm ci && npm run dev`.
-Open http://127.0.0.1:5173. Microphone capture requires localhost or HTTPS.
-Deployment commands and backup details are in [deploy/README.md](deploy/README.md).
-
-## Try this
-
-1. Start a new conversation: “I'm sam.patel@example.test. Check my account.”
-2. Ask: “Which invoices are eligible for a mock refund?”
-3. Name an invoice from the returned list, then click **Confirm invoice and amount**.
-4. Ask about the Business monthly refund policy and inspect its citations.
-5. Switch to Voice to continue the same conversation; allow microphone access.
-
-`refresh_demo.py` adds today's paid demo invoices for Sam and Alex (`alex.morgan@example.test`).
-IDs are `INV-D<YYYYMMDD>-1` and `-2`. Runs are insert-only and idempotent;
-existing invoices and receipts are never reset. The six-hour maintenance job
-runs it. Eligibility still uses current account state and refund rules.
-Refund confirmation remains a separate server endpoint called by the UI button.
-Spoken agreement does not issue a refund.
-
-## Rate limits and failure handling
-
-Production defaults limit new sessions to 10/minute and 100/day per network peer,
-plus 200/minute and 5,000/day globally. Valid browser sessions are reused.
-Agent requests are limited to 12/minute per session. Provider calls attempt up
-to three requests within a 45-second budget; longer Retry-After instructions
-return a retry-later state. The graph budget is 150 seconds and voice sessions
-have a 30-minute cap. Each API worker allows one voice socket per session and
-three globally by default. Voice releases audio on page exit or after two minutes
-in a hidden tab. Reconnects preserve history. Refund transactions validate
-ownership, eligibility, expiration, and exact confirmation; unique persisted
-receipts make refunds idempotent. Mutations are not automatically replayed.
-
-## Guardrail evaluation
-
-From `backend/`, run `../.venv/bin/python eval_guardrail.py` after seeding policies.
-It sends the original 10 in-scope and 10 out-of-scope queries plus 10 fixed
-held-out out-of-scope queries through `app.policy.search` with real embeddings.
-It reports retrieval-only and verified decisions on the same passages, each
-group's before/after pass rates, and similarity extrema. The second check uses
-Gemini 3.5 Flash-Lite with a ten-second timeout and no automatic retries. Provider
-failures fail closed but do not count as semantic evaluation successes. In-scope
-passes require GROUNDED; out-of-scope passes require rejection. This conservative
-check can reject valid questions. A second frozen set adds 15 in-scope
-paraphrases and 15 challenging out-of-scope queries; run only those with
-`eval_guardrail.py --new-only`. Cases are never resampled after measurement.
-Timeouts, provider 429s, malformed output, and detected verdict-override
-instructions fail closed with “I couldn't verify that right now” and an
-escalation offer. Only attempted provider calls emit model-completed trace
-events with measured latency and available provider-reported tokens.
-This is a small retrieval check, not a measure of answer correctness. Record
-measured results below; no scores are prefilled.
-
-| Group | Queries | Before | After |
-| --- | --- | --- | --- |
-| Original in scope | 10 | | |
-| Original out of scope | 10 | | |
-| Held-out out of scope | 10 | | |
-| V2 in scope | 15 | | |
-| V2 out of scope | 15 | | |
+Open http://127.0.0.1:5173. Operations and the key-rotation warning are in
+[deploy/README.md](deploy/README.md); keep secrets, certificates, and backups outside Git.
 
 ## Tests
 
-The focused suite contains 42 tests, including 19 database checks.
-From `backend/`: `RUN_DB_TESTS=1 ../.venv/bin/python -m unittest discover -s tests -v`.
-Database tests create and remove a disposable database; the account needs that privilege.
-Use `RUN_DB_TESTS=0` for non-DB checks without a running database.
-From `frontend/`: `npm run build`.
-Physical microphone capture, playback, mute, and interruption require a manual browser check;
-automated checks do not establish that those behaviors work.
+The full backend suite contains **46 tests**: 27 non-DB checks and 19 PostgreSQL
+checks. It covers session isolation/quotas, tool recovery, ticket consent,
+refund ownership/eligibility/confirmation/idempotency, citation applicability,
+verifier on/off modes and failures, trace fields, voice socket limits, and
+insert-only daily demo invoices. DB tests create a disposable database; the
+configured account needs permission to create/drop it.
+
+From `backend/`:
+
+```sh
+RUN_DB_TESTS=1 ../.venv/bin/python -m unittest discover -s tests -v
+RUN_DB_TESTS=0 DATABASE_URL=postgresql://unused:unused@127.0.0.1:1/no_database ../.venv/bin/python -m unittest discover -s tests -v
+RELEVANCE_VERIFIER=on ../.venv/bin/python eval_guardrail.py
+RELEVANCE_VERIFIER=on ../.venv/bin/python eval_guardrail.py --new-only
+```
+
+From the repository root:
+
+```sh
+(cd frontend && npm run build)
+./deploy/smoke_test.sh https://loopp-support.pages.dev
+```
+
+The smoke script checks readiness, session cookies, chat creation, and unauthenticated
+401 rejection. It makes no agent or refund requests. Automated checks do not
+establish physical microphone, speaker playback, mute, or interruption behavior;
+those require a manual browser check.
+
+## Model note
+
+Gemini 2.5 Flash-Lite is unavailable to new projects, so the app uses Gemini 3.5 Flash-Lite.
+Gemini Live remains the native speech integration.
+
+## Trade-offs and known limits
+
+- Records and financial actions are fictional. Demo email lookup is not authentication, and mock receipts do not transfer money.
+- Displayed cost is a text-only estimate. Missing Live audio and embedding costs remain unavailable; a complete session total is not fabricated.
+- Spoken refund confirmation is intentionally unsupported. Only the UI button calling the separate server-side endpoint can issue a mock receipt.
+- PostgreSQL performs an exact vector scan over 30 chunks from 15 versioned documents. This keeps retrieval simple for a small corpus; larger corpora would need a different indexing trade-off.
