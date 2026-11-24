@@ -4,28 +4,28 @@ import asyncio
 import json
 import logging
 import os
-from threading import Lock
 from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
+from threading import Lock
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Response, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import types
 
-from app.api.chat import router as chat_router
 from app.agent.runner import run_turn
+from app.api.chat import router as chat_router
 from app.config import configured_api_key, validate_runtime_config
+from app.db import connect
+from app.security import COOKIE, check_origin, consume_quota, limit_session_creation
 from app.storage import (
     create_chat,
     finish_voice_request,
     get_chat,
-    reserve_voice_request,
     new_session,
-    session_valid,
+    reserve_voice_request,
     session_id,
+    session_valid,
 )
-from app.security import COOKIE, check_origin, consume_quota, limit_session_creation
-from app.db import connect
 
 logger = logging.getLogger(__name__)
 
@@ -250,7 +250,7 @@ async def voice_connected(websocket: WebSocket, owner: str) -> None:
                 ]
             }
         ],
-        "system_instruction": "You are Loopp's live voice interface. For every complete user speech turn, call support_request once with the user's exact request. Never answer customer questions from your own knowledge. After its result, speak the returned answer faithfully and concisely, including policy citation IDs and any confirmation requirement. Never claim a refund was issued without a receipt. Audio interruptions are allowed.",
+        "system_instruction": "You are Loopp's live voice interface for general customer support. For every complete user speech turn, call support_request once with the user's exact spoken request, including prior concern details when they continue a topic. Never answer from your own knowledge. Speak the returned answer faithfully and concisely, including policy citation IDs when present. Do not invent refund offers, eligibility lists, or confirmation requests that are not in the returned answer. Never claim a refund was issued without a receipt. Speak ticket wording exactly; do not add that a live team is reviewing or will follow up. When the answer presents numbered invoice options for a refund choice, speak the option numbers and amounts; full invoice IDs are on screen, so do not read long date-based IDs aloud. When the answer requires confirmation, say the conversation panel has a confirmation card and tell the customer to click 'Confirm invoice and amount'; spoken yes is not confirmation. If email lookup fails, ask them to spell the full address slowly, including dots and domain, or type it in the email box. Audio interruptions are allowed.",
     }
 
     try:
@@ -448,7 +448,7 @@ async def voice_connected(websocket: WebSocket, owner: str) -> None:
                 task.result()
     except WebSocketDisconnect:
         pass
-    except Exception as exc:
+    except Exception:
         logger.exception("Gemini Live session failed")
         try:
             await websocket.send_json(

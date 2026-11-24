@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 
 export type ToolRun = { id: number; name: string; status: 'running' | 'done' | 'failed' | 'blocked'; result?: unknown; startedAt: number; durationMs?: number; traceId?: string; toolId?: string };
 
-export type TraceEvent = { type: string; name?: string; result?: unknown; duration_ms?: number; trace_id?: string; tool_id?: string; message?: string; category?: string; usage?: { input_tokens?: number; output_tokens?: number }; estimated_cost_usd?: number | null; messages?: unknown; scope?: string };
+export type TraceEvent = { type: string; field?: string; name?: string; result?: unknown; duration_ms?: number; trace_id?: string; tool_id?: string; message?: string; category?: string; usage?: { input_tokens?: number; output_tokens?: number }; estimated_cost_usd?: number | null; messages?: unknown; scope?: string };
 type Evidence = { decision: string; verification_reason: string; threshold: number; applicable_tier?: string; top_similarity?: number; active_policy_versions?: Record<string, number> };
 
 export type PendingRefund = { status: 'confirmation_required'; token: string; invoice_id: string; amount_cents: number; currency: string };
@@ -14,7 +14,7 @@ export const toolNames: Record<string, string> = {
   verify_customer: 'Identity verified',
   get_account: 'Account retrieved',
   get_invoice: 'Invoice retrieved',
-  list_invoices: 'Invoices and eligibility checked',
+  list_invoices: 'Invoices retrieved',
   search_policy: 'Policy searched',
   issue_mock_refund: 'Refund eligibility checked',
   create_escalation_ticket: 'Support ticket created',
@@ -108,8 +108,8 @@ export function ActivityPanel({ tools, compact = false, events = [], receipts = 
   </section>;
 }
 
-export function RefundCard({ pending, receipt, busy, onConfirm }: { pending: PendingRefund | null; receipt: Receipt | null; busy: boolean; onConfirm: () => void }) {
+export function RefundCard({ pending, receipt, busy, busyLabel = 'Confirming…', onConfirm }: { pending: PendingRefund | null; receipt: Receipt | null; busy: boolean; busyLabel?: string; onConfirm: () => void }) {
   if (!pending && !receipt) return null;
   if (receipt && !pending) return <div className="refund-card receipt-card"><div className="refund-icon">✓</div><div><span className="refund-overline">Mock receipt issued</span><h3>{receipt.invoice_id}</h3><p>{(receipt.amount_cents / 100).toFixed(2)} {receipt.currency} · No real money moved</p><code>{receipt.receipt_id}</code></div></div>;
-  return <div className="refund-card"><div className="refund-card-top"><span className="refund-overline">Your confirmation is needed</span><span className="refund-state">Pending</span></div><h3>Confirm this refund</h3><div className="refund-amount"><span>{pending!.invoice_id}</span><strong>{(pending!.amount_cents / 100).toFixed(2)} <small>{pending!.currency}</small></strong></div><p>Use the confirmation button below. Spoken agreement cannot issue a refund. No real money will move.</p><button type="button" className="button-jade" disabled={busy} onClick={onConfirm}>{busy ? 'Confirming…' : 'Confirm invoice and amount'}</button></div>;
+  return <div className="refund-card"><div className="refund-card-top"><span className="refund-overline">Your confirmation is needed</span><span className="refund-state">Pending</span></div><h3>Confirm this refund</h3><div className="refund-amount"><span>{pending!.invoice_id}</span><strong>{(pending!.amount_cents / 100).toFixed(2)} <small>{pending!.currency}</small></strong></div><p>Use the confirmation button below. Spoken agreement cannot issue a refund. No real money will move.</p><button type="button" className="button-jade" disabled={busy} onClick={onConfirm}>{busy ? busyLabel : 'Confirm invoice and amount'}</button></div>;
 }

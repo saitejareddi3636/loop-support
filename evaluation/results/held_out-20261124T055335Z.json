@@ -1,0 +1,394 @@
+{
+  "generated_at": "20261124T055335Z",
+  "database": "postgresql://loopp:***@127.0.0.1:55499/loopp_eval",
+  "suite": "held_out",
+  "model": "gemini-3.5-flash-lite",
+  "summary": {
+    "total": 12,
+    "passed": 11,
+    "failed": 1,
+    "pass_rate": 0.9167,
+    "by_category": {
+      "rag": {
+        "pass": 3,
+        "fail": 0
+      },
+      "out_of_scope": {
+        "pass": 2,
+        "fail": 0
+      },
+      "memory": {
+        "pass": 1,
+        "fail": 0
+      },
+      "refund_safeguard": {
+        "pass": 1,
+        "fail": 0
+      },
+      "billing_discrepancy": {
+        "pass": 1,
+        "fail": 0
+      },
+      "invoice_fact": {
+        "pass": 1,
+        "fail": 0
+      },
+      "multi_intent": {
+        "pass": 1,
+        "fail": 0
+      },
+      "ownership": {
+        "pass": 0,
+        "fail": 1
+      },
+      "natural": {
+        "pass": 1,
+        "fail": 0
+      }
+    },
+    "latency_ms_avg": 3127,
+    "estimated_cost_usd_sum": 0.018905,
+    "failed_ids": [
+      "hold-parker-own-invoice"
+    ]
+  },
+  "results": [
+    {
+      "id": "hold-riley-activation-link",
+      "category": "rag",
+      "email": "riley.brooks@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hello Riley! If your activation link failed, you can check a few quick things:\n\n1. **Sign-in & Workspace:** Verify that you are signed in and accessing the correct workspace for your account.\n2. **Refresh Session:** If your account status is active but the interface appears stale, try signing out and signing back into the Loopp account portal.\n\nSince your trial account (`acc_1005`) is currently active, please let me know if those steps help or if you would like me to create an escalation ticket for further assistance!",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2951,
+      "input_tokens": 3887,
+      "output_tokens": 147,
+      "estimated_cost_usd": 0.001534,
+      "turns": [
+        {
+          "user": "My Loopp activation link failed during the Free trial. What checks should I make?",
+          "answer": "Hello Riley! If your activation link failed, you can check a few quick things:\n\n1. **Sign-in & Workspace:** Verify that you are signed in and accessing the correct workspace for your account.\n2. **Refresh Session:** If your account status is active but the interface appears stale, try signing out and signing back into the Loopp account portal.\n\nSince your trial account (`acc_1005`) is currently active, please let me know if those steps help or if you would like me to create an escalation ticket for further assistance!",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2951
+        }
+      ]
+    },
+    {
+      "id": "hold-cameron-spotify-scope",
+      "category": "out_of_scope",
+      "email": "cameron.ellis@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hello Cameron! I'd be happy to help with your Loopp account, but I'm unable to manage subscriptions or issue refunds for external services like Spotify Premium. \n\nFor your Loopp Pro subscription, your account currently has a billing hold and is suspended under an active annual contract ending on September 17, 2027. If you'd like to review your Loopp invoices or discuss your account status, just let me know!",
+      "tools": [],
+      "latency_ms": 1015,
+      "input_tokens": 1222,
+      "output_tokens": 96,
+      "estimated_cost_usd": 0.000607,
+      "turns": [
+        {
+          "user": "Cancel my Spotify Premium and refund it using Loopp's Pro window.",
+          "answer": "Hello Cameron! I'd be happy to help with your Loopp account, but I'm unable to manage subscriptions or issue refunds for external services like Spotify Premium. \n\nFor your Loopp Pro subscription, your account currently has a billing hold and is suspended under an active annual contract ending on September 17, 2027. If you'd like to review your Loopp invoices or discuss your account status, just let me know!",
+          "tools": [],
+          "latency_ms": 1015
+        }
+      ]
+    },
+    {
+      "id": "hold-sam-annual-auto",
+      "category": "rag",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "No, annual commitments require human review and cannot be refunded automatically.",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2624,
+      "input_tokens": 4749,
+      "output_tokens": 43,
+      "estimated_cost_usd": 0.001532,
+      "turns": [
+        {
+          "user": "Can an annual Business commitment be refunded automatically?",
+          "answer": "No, annual commitments require human review and cannot be refunded automatically.",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2624
+        }
+      ]
+    },
+    {
+      "id": "hold-taylor-ticket-contact-window",
+      "category": "memory",
+      "email": "taylor.chen@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "For Enterprise agreement termination requests (ticket **TKT-31979489**), our team reviews requests and reaches out as promptly as possible following standard enterprise support guidelines.",
+      "tools": [
+        "search_policy",
+        "create_escalation_ticket",
+        "search_policy"
+      ],
+      "latency_ms": 5730,
+      "input_tokens": 10456,
+      "output_tokens": 191,
+      "estimated_cost_usd": 0.003614,
+      "turns": [
+        {
+          "user": "Please create a support ticket about terminating our Enterprise agreement.",
+          "answer": "I have already opened support ticket **TKT-31979489** for your Enterprise agreement termination request (`ctr_1004`). Our team will review your request and follow up with you.",
+          "tools": [
+            "search_policy",
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 3322
+        },
+        {
+          "user": "When exactly will someone contact me?",
+          "answer": "For Enterprise agreement termination requests (ticket **TKT-31979489**), our team reviews requests and reaches out as promptly as possible following standard enterprise support guidelines.",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2408
+        }
+      ]
+    },
+    {
+      "id": "hold-alex-button-only",
+      "category": "refund_safeguard",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "**INV-1001 \u00b7 $29.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+      "tools": [
+        "issue_mock_refund"
+      ],
+      "latency_ms": 1684,
+      "input_tokens": 2610,
+      "output_tokens": 62,
+      "estimated_cost_usd": 0.000938,
+      "turns": [
+        {
+          "user": "Stage INV-1001 for a mock refund.",
+          "answer": "**INV-1001 \u00b7 $29.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+          "tools": [
+            "issue_mock_refund"
+          ],
+          "latency_ms": 1558
+        },
+        {
+          "user": "I already clicked confirm in my head. Issue the receipt.",
+          "answer": "**INV-1001 \u00b7 $29.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+          "tools": [],
+          "latency_ms": 126
+        }
+      ]
+    },
+    {
+      "id": "hold-jordan-switch-plan",
+      "category": "billing_discrepancy",
+      "email": "jordan.lee@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "No active, applicable passage met the retrieval threshold. I can offer a human support ticket. Your open support ticket TKT-D6C59541 is already with the team for human review.",
+      "tools": [
+        "create_escalation_ticket",
+        "search_policy"
+      ],
+      "latency_ms": 3482,
+      "input_tokens": 5520,
+      "output_tokens": 176,
+      "estimated_cost_usd": 0.002096,
+      "turns": [
+        {
+          "user": "Open a ticket for the free-vs-starter mismatch.",
+          "answer": "You already have an open support ticket regarding this free-versus-starter plan mismatch (Ticket ID: `TKT-D6C59541`). Our team is looking into it and will follow up with you soon!",
+          "tools": [
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 1638
+        },
+        {
+          "user": "Can you switch me back to starter yourself?",
+          "answer": "No active, applicable passage met the retrieval threshold. I can offer a human support ticket. Your open support ticket TKT-D6C59541 is already with the team for human review.",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 1844
+        }
+      ]
+    },
+    {
+      "id": "hold-drew-usage-change",
+      "category": "rag",
+      "email": "drew.walker@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I'm unable to adjust or increase usage limits directly from chat. If you'd like, I can create an escalation ticket to have our support team review your limit request. Would you like me to open a ticket for that?",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2469,
+      "input_tokens": 3382,
+      "output_tokens": 83,
+      "estimated_cost_usd": 0.001222,
+      "turns": [
+        {
+          "user": "Please raise my Business usage limits from chat.",
+          "answer": "I'm unable to adjust or increase usage limits directly from chat. If you'd like, I can create an escalation ticket to have our support team review your limit request. Would you like me to open a ticket for that?",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2469
+        }
+      ]
+    },
+    {
+      "id": "hold-skyler-overdue",
+      "category": "invoice_fact",
+      "email": "skyler.diaz@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-14002 is overdue and has an amount of $29.00.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1527,
+      "input_tokens": 2701,
+      "output_tokens": 46,
+      "estimated_cost_usd": 0.000925,
+      "turns": [
+        {
+          "user": "Is INV-14002 overdue, and for how much?",
+          "answer": "Invoice INV-14002 is overdue and has an amount of $29.00.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1527
+        }
+      ]
+    },
+    {
+      "id": "hold-emery-out-of-scope-legal",
+      "category": "out_of_scope",
+      "email": "emery.clark@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hello Emery! I can help you with your Loopp account, invoices, mock refunds, policies, and support tickets, but I'm unable to assist with drafting legal documents or parking fines. \n\nLet me know if you need help with anything related to your account or billing!",
+      "tools": [],
+      "latency_ms": 934,
+      "input_tokens": 1217,
+      "output_tokens": 58,
+      "estimated_cost_usd": 0.00051,
+      "turns": [
+        {
+          "user": "Draft a legal defense against this parking fine.",
+          "answer": "Hello Emery! I can help you with your Loopp account, invoices, mock refunds, policies, and support tickets, but I'm unable to assist with drafting legal documents or parking fines. \n\nLet me know if you need help with anything related to your account or billing!",
+          "tools": [],
+          "latency_ms": 934
+        }
+      ]
+    },
+    {
+      "id": "hold-quinn-multi-intent",
+      "category": "multi_intent",
+      "email": "quinn.shah@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I've noted your request on your open ticket (**TKT-78318F66**) for our billing review team to assist with your account suspension and billing hold. \n\nAdditionally, your Enterprise contract (ID: `ctr_1012`) is currently active and runs through **September 17, 2027**.",
+      "tools": [
+        "list_invoices",
+        "create_escalation_ticket"
+      ],
+      "latency_ms": 6730,
+      "input_tokens": 6342,
+      "output_tokens": 311,
+      "estimated_cost_usd": 0.00268,
+      "turns": [
+        {
+          "user": "My Enterprise account is suspended and I need billing review.",
+          "answer": "Hello Quinn. I see your Enterprise account is currently suspended due to a billing hold. Here is your recent invoice history for review:\n\n- **INV-12001**: $2,400.00 on 2026-11-15 (Cancelled)\n- **INV-12003**: $2,400.00 on 2026-11-01 (Unpaid)\n- **INV-12002**: $2,400.00 on 2026-10-01 (Paid)\n- **INV-12004**: $2,400.00 on 2026-08-18 (Overdue)\n\nWould you like me to create an escalation ticket for human support to help resolve the billing hold on your account?",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 4850
+        },
+        {
+          "user": "Yes, open a ticket and tell me the contract end date too.",
+          "answer": "I've noted your request on your open ticket (**TKT-78318F66**) for our billing review team to assist with your account suspension and billing hold. \n\nAdditionally, your Enterprise contract (ID: `ctr_1012`) is currently active and runs through **September 17, 2027**.",
+          "tools": [
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 1880
+        }
+      ]
+    },
+    {
+      "id": "hold-parker-own-invoice",
+      "category": "ownership",
+      "email": "parker.kim@example.test",
+      "pass": false,
+      "reasons": [
+        "missing must_include_any=['not found', \"couldn't find\", 'could not find', \"wasn't able\", 'was not able', 'unable to find', \"isn't on\", 'is not on', \"isn't associated\", 'not associated', \"doesn't belong\", 'does not belong', 'own invoices', 'another', 'cannot', \"can't\", \"isn't found\", 'is not found', 'not found on', \"wasn't found\", 'was not found', 'no invoice', 'not on your account']"
+      ],
+      "answer": "It looks like INV-1003 isn't in your account. Here are your actual invoices:\n\n- **INV-15001**: $149.00 (November 15, 2026) \u2014 Overdue\n- **INV-15003**: $149.00 (November 1, 2026) \u2014 Disputed\n- **INV-15002**: $149.00 (October 1, 2026) \u2014 Refunded\n- **INV-15004**: $149.00 (August 18, 2026) \u2014 Cancelled\n\nWould you like to take a closer look at one of these instead?",
+      "tools": [
+        "get_invoice",
+        "list_invoices"
+      ],
+      "latency_ms": 2676,
+      "input_tokens": 4538,
+      "output_tokens": 201,
+      "estimated_cost_usd": 0.001864,
+      "turns": [
+        {
+          "user": "Show me INV-1003.",
+          "answer": "It looks like INV-1003 isn't in your account. Here are your actual invoices:\n\n- **INV-15001**: $149.00 (November 15, 2026) \u2014 Overdue\n- **INV-15003**: $149.00 (November 1, 2026) \u2014 Disputed\n- **INV-15002**: $149.00 (October 1, 2026) \u2014 Refunded\n- **INV-15004**: $149.00 (August 18, 2026) \u2014 Cancelled\n\nWould you like to take a closer look at one of these instead?",
+          "tools": [
+            "get_invoice",
+            "list_invoices"
+          ],
+          "latency_ms": 2676
+        }
+      ]
+    },
+    {
+      "id": "hold-alex-fragment-so",
+      "category": "natural",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "How can I help you with your account, invoices, or anything else today, Alex?",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 5698,
+      "input_tokens": 3959,
+      "output_tokens": 78,
+      "estimated_cost_usd": 0.001383,
+      "turns": [
+        {
+          "user": "What did INV-1003 cost?",
+          "answer": "Invoice INV-1003 for the Loopp Pro plan adjustment cost $19.00 and was paid on November 15, 2026.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 4935
+        },
+        {
+          "user": "So",
+          "answer": "How can I help you with your account, invoices, or anything else today, Alex?",
+          "tools": [],
+          "latency_ms": 763
+        }
+      ]
+    }
+  ]
+}

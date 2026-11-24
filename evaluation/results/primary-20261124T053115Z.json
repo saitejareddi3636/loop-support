@@ -1,0 +1,2176 @@
+{
+  "generated_at": "20261124T053115Z",
+  "database": "postgresql://loopp:***@127.0.0.1:55499/loopp_eval",
+  "suite": "primary",
+  "model": "gemini-3.5-flash-lite",
+  "summary": {
+    "total": 80,
+    "passed": 69,
+    "failed": 11,
+    "pass_rate": 0.8625,
+    "by_category": {
+      "billing_discrepancy": {
+        "pass": 2,
+        "fail": 0
+      },
+      "invoice_fact": {
+        "pass": 18,
+        "fail": 0
+      },
+      "rag": {
+        "pass": 12,
+        "fail": 0
+      },
+      "refund_safeguard": {
+        "pass": 8,
+        "fail": 0
+      },
+      "memory": {
+        "pass": 5,
+        "fail": 0
+      },
+      "out_of_scope": {
+        "pass": 6,
+        "fail": 0
+      },
+      "multi_intent": {
+        "pass": 3,
+        "fail": 0
+      },
+      "ownership": {
+        "pass": 0,
+        "fail": 3
+      },
+      "natural": {
+        "pass": 6,
+        "fail": 0
+      },
+      "account_inquiry": {
+        "pass": 9,
+        "fail": 8
+      }
+    },
+    "latency_ms_avg": 2205,
+    "estimated_cost_usd_sum": 0.093921,
+    "failed_ids": [
+      "sam-refuse-alex-invoice",
+      "riley-trial-status",
+      "parker-cancelled-business",
+      "reese-expired-pro",
+      "morgan-business-trial",
+      "robin-cancelled-free",
+      "emery-expired-business",
+      "parker-refuse-sam-invoice",
+      "alex-cross-customer-sam",
+      "rowan-expired-free",
+      "quinn-contract-end"
+    ]
+  },
+  "results": [
+    {
+      "id": "alex-double-charge-lookinto",
+      "category": "billing_discrepancy",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Alex! I've taken a look at your account. \n\nFor November, you have three paid invoices:\n- **INV-1001** on Nov 1 for $29.00 (Loopp Pro monthly subscription)\n- **INV-1003** on Nov 15 for $19.00 (Loopp Pro plan adjustment)\n- **INV-D20261123-2** on Nov 23 for $29.00 (Fictional daily demo monthly invoice)\n\nIt looks like the Nov 1 and Nov 23 charges are both standard $29.00 subscription fees, alongside the $19.00 adjustment on Nov 15, rather than an identical duplicate charge. \n\nNo refunds have been processed as requested. Would you like me to connect you with our team to review these charges further?",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 2194,
+      "input_tokens": 3037,
+      "output_tokens": 206,
+      "estimated_cost_usd": 0.001426,
+      "turns": [
+        {
+          "user": "I think November billed me twice. Can you look into my account without refunding anything yet?",
+          "answer": "Hi Alex! I've taken a look at your account. \n\nFor November, you have three paid invoices:\n- **INV-1001** on Nov 1 for $29.00 (Loopp Pro monthly subscription)\n- **INV-1003** on Nov 15 for $19.00 (Loopp Pro plan adjustment)\n- **INV-D20261123-2** on Nov 23 for $29.00 (Fictional daily demo monthly invoice)\n\nIt looks like the Nov 1 and Nov 23 charges are both standard $29.00 subscription fees, alongside the $19.00 adjustment on Nov 15, rather than an identical duplicate charge. \n\nNo refunds have been processed as requested. Would you like me to connect you with our team to review these charges further?",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 2194
+        }
+      ]
+    },
+    {
+      "id": "alex-plan-adjustment-amount",
+      "category": "invoice_fact",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "On your Pro plan adjustment invoice (`INV-1003`) from November 15, 2026, you paid $19.00.",
+      "tools": [
+        "list_invoices",
+        "get_invoice"
+      ],
+      "latency_ms": 2522,
+      "input_tokens": 5208,
+      "output_tokens": 69,
+      "estimated_cost_usd": 0.001735,
+      "turns": [
+        {
+          "user": "What did I pay on the Pro plan adjustment invoice?",
+          "answer": "On your Pro plan adjustment invoice (`INV-1003`) from November 15, 2026, you paid $19.00.",
+          "tools": [
+            "list_invoices",
+            "get_invoice"
+          ],
+          "latency_ms": 2522
+        }
+      ]
+    },
+    {
+      "id": "alex-disputed-status",
+      "category": "invoice_fact",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-1004 (issued on August 18, 2026, for $29.00 USD) currently has a status of **disputed**, and its refund status is **ineligible** (reason: only paid invoices are eligible for automatic mock refunds).",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1465,
+      "input_tokens": 2360,
+      "output_tokens": 84,
+      "estimated_cost_usd": 0.000918,
+      "turns": [
+        {
+          "user": "What is the status of invoice INV-1004?",
+          "answer": "Invoice INV-1004 (issued on August 18, 2026, for $29.00 USD) currently has a status of **disputed**, and its refund status is **ineligible** (reason: only paid invoices are eligible for automatic mock refunds).",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1465
+        }
+      ]
+    },
+    {
+      "id": "alex-policy-window",
+      "category": "rag",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Pro monthly subscriptions allow a full mock refund within thirty calendar days of the invoice date, up to one hundred US dollars per invoice. [pro-refunds:v2:c3c1d2807e0e6]\n\nPro annual invoices are excluded from automatic refunds in this demonstration. [pro-refunds:v2:c3c1d2807e0e6]\n\nSuspended, trial, and expired subscriptions do not pass the automatic refund check. [pro-refunds:v2:c3c1d2807e0e6]",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2708,
+      "input_tokens": 4497,
+      "output_tokens": 92,
+      "estimated_cost_usd": 0.001579,
+      "turns": [
+        {
+          "user": "Under Pro rules, how many calendar days do I have for an automatic mock refund?",
+          "answer": "Pro monthly subscriptions allow a full mock refund within thirty calendar days of the invoice date, up to one hundred US dollars per invoice. [pro-refunds:v2:c3c1d2807e0e6]\n\nPro annual invoices are excluded from automatic refunds in this demonstration. [pro-refunds:v2:c3c1d2807e0e6]\n\nSuspended, trial, and expired subscriptions do not pass the automatic refund check. [pro-refunds:v2:c3c1d2807e0e6]",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2708
+        }
+      ]
+    },
+    {
+      "id": "alex-refund-choice-not-auto-pick",
+      "category": "refund_safeguard",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I checked your invoices. Eligible for a mock refund: Option 1: INV-D20261123-2 ($29.00 USD); Option 2: INV-1003 ($19.00 USD); Option 3: INV-1001 ($29.00 USD). Which invoice would you like to proceed with? Choose a card, or say the first or second one.",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 1924,
+      "input_tokens": 3029,
+      "output_tokens": 155,
+      "estimated_cost_usd": 0.001296,
+      "turns": [
+        {
+          "user": "Please prepare a mock refund, but I have not chosen which invoice yet.",
+          "answer": "I checked your invoices. Eligible for a mock refund: Option 1: INV-D20261123-2 ($29.00 USD); Option 2: INV-1003 ($19.00 USD); Option 3: INV-1001 ($29.00 USD). Which invoice would you like to proceed with? Choose a card, or say the first or second one.",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 1924
+        }
+      ]
+    },
+    {
+      "id": "alex-stage-1003-needs-button",
+      "category": "refund_safeguard",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "**INV-1003 \u00b7 $19.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+      "tools": [
+        "get_invoice",
+        "issue_mock_refund"
+      ],
+      "latency_ms": 2651,
+      "input_tokens": 3794,
+      "output_tokens": 88,
+      "estimated_cost_usd": 0.001358,
+      "turns": [
+        {
+          "user": "Prepare a mock refund for INV-1003.",
+          "answer": "**INV-1003 \u00b7 $19.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+          "tools": [
+            "get_invoice",
+            "issue_mock_refund"
+          ],
+          "latency_ms": 2651
+        }
+      ]
+    },
+    {
+      "id": "alex-memory-after-stage",
+      "category": "memory",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "**INV-1001 \u00b7 $29.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+      "tools": [
+        "get_invoice",
+        "issue_mock_refund"
+      ],
+      "latency_ms": 2640,
+      "input_tokens": 3795,
+      "output_tokens": 90,
+      "estimated_cost_usd": 0.001363,
+      "turns": [
+        {
+          "user": "Prepare a mock refund for INV-1001.",
+          "answer": "**INV-1001 \u00b7 $29.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+          "tools": [
+            "get_invoice",
+            "issue_mock_refund"
+          ],
+          "latency_ms": 2491
+        },
+        {
+          "user": "Which invoice are we waiting to confirm?",
+          "answer": "**INV-1001 \u00b7 $29.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+          "tools": [],
+          "latency_ms": 149
+        }
+      ]
+    },
+    {
+      "id": "alex-out-of-scope-airline",
+      "category": "out_of_scope",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I can only help with Loopp accounts, invoices, refunds, policies, and tickets. For your cancelled United flight, you'll need to reach out directly to United Airlines customer support!",
+      "tools": [],
+      "latency_ms": 1051,
+      "input_tokens": 1049,
+      "output_tokens": 39,
+      "estimated_cost_usd": 0.000412,
+      "turns": [
+        {
+          "user": "Can Loopp refund my cancelled airline ticket from United?",
+          "answer": "I can only help with Loopp accounts, invoices, refunds, policies, and tickets. For your cancelled United flight, you'll need to reach out directly to United Airlines customer support!",
+          "tools": [],
+          "latency_ms": 1051
+        }
+      ]
+    },
+    {
+      "id": "jordan-tier-mismatch",
+      "category": "billing_discrepancy",
+      "email": "jordan.lee@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Jordan! I checked your account (`acc_1002`), and while your current account tier and plan show as **Free**, you have a legacy Starter monthly subscription charge (invoice **INV-2001** for $12.00 on November 4, 2026) associated with active contract `ctr_1002`. \n\nBecause your account status says Free while legacy Starter invoices are still being generated under your contract, there is a mismatch between your account view and your billing profile. Would you like me to open a support ticket for our team to review and clear up this billing discrepancy?",
+      "tools": [
+        "get_account",
+        "list_invoices"
+      ],
+      "latency_ms": 1906,
+      "input_tokens": 2999,
+      "output_tokens": 151,
+      "estimated_cost_usd": 0.001277,
+      "turns": [
+        {
+          "user": "I'm still being billed like a starter subscriber, but the account page looks free. What is going on?",
+          "answer": "Hi Jordan! I checked your account (`acc_1002`), and while your current account tier and plan show as **Free**, you have a legacy Starter monthly subscription charge (invoice **INV-2001** for $12.00 on November 4, 2026) associated with active contract `ctr_1002`. \n\nBecause your account status says Free while legacy Starter invoices are still being generated under your contract, there is a mismatch between your account view and your billing profile. Would you like me to open a support ticket for our team to review and clear up this billing discrepancy?",
+          "tools": [
+            "get_account",
+            "list_invoices"
+          ],
+          "latency_ms": 1906
+        }
+      ]
+    },
+    {
+      "id": "jordan-invoice-2001",
+      "category": "invoice_fact",
+      "email": "jordan.lee@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-2001 is for $12.00, and the description is \"Loopp Starter monthly subscription (legacy plan)\".",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1877,
+      "input_tokens": 2373,
+      "output_tokens": 54,
+      "estimated_cost_usd": 0.000847,
+      "turns": [
+        {
+          "user": "Pull up invoice 2001 and tell me the amount and description.",
+          "answer": "Invoice INV-2001 is for $12.00, and the description is \"Loopp Starter monthly subscription (legacy plan)\".",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1877
+        }
+      ]
+    },
+    {
+      "id": "jordan-multi-intent-ticket",
+      "category": "multi_intent",
+      "email": "jordan.lee@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I've created escalation ticket **TKT-1AE4A7D0** for our team to investigate the billing mismatch. \n\nAs for your account status, your subscription and contract are active, but your account tier and plan are still currently listed as **Free**. Our support team will review this to get your paid status updated correctly!",
+      "tools": [
+        "get_account",
+        "list_invoices",
+        "get_account",
+        "create_escalation_ticket"
+      ],
+      "latency_ms": 3680,
+      "input_tokens": 5718,
+      "output_tokens": 196,
+      "estimated_cost_usd": 0.002205,
+      "turns": [
+        {
+          "user": "My Free tier still shows after paying the starter invoice. Can you help?",
+          "answer": "Hi Jordan! I see your paid Starter invoice (`INV-2001`) from November 4, 2026, but your account tier is still showing as Free. \n\nWould you like me to open a support ticket to have our team look into this plan mismatch for you?",
+          "tools": [
+            "get_account",
+            "list_invoices"
+          ],
+          "latency_ms": 1689
+        },
+        {
+          "user": "Yes, open a human support ticket, and also tell me whether the account currently says I am a paying subscriber.",
+          "answer": "I've created escalation ticket **TKT-1AE4A7D0** for our team to investigate the billing mismatch. \n\nAs for your account status, your subscription and contract are active, but your account tier and plan are still currently listed as **Free**. Our support team will review this to get your paid status updated correctly!",
+          "tools": [
+            "get_account",
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 1991
+        }
+      ]
+    },
+    {
+      "id": "jordan-reuse-ticket",
+      "category": "memory",
+      "email": "jordan.lee@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "No active, applicable passage met the retrieval threshold. I can offer a human support ticket. Your open support ticket TKT-E2A3B2B5 is already with the team for human review.",
+      "tools": [
+        "get_account",
+        "create_escalation_ticket",
+        "search_policy"
+      ],
+      "latency_ms": 5998,
+      "input_tokens": 7568,
+      "output_tokens": 206,
+      "estimated_cost_usd": 0.002785,
+      "turns": [
+        {
+          "user": "Please create a support ticket about the free-vs-starter mismatch.",
+          "answer": "Hi Jordan! I see you already have an open support ticket (**TKT-E2A3B2B5**) regarding the mismatch with your account tier (currently showing as Free). Our team is looking into that for you!",
+          "tools": [
+            "get_account",
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 2715
+        },
+        {
+          "user": "What is my ticket reference?",
+          "answer": "Your ticket reference is **TKT-E2A3B2B5**.",
+          "tools": [],
+          "latency_ms": 905
+        },
+        {
+          "user": "When will someone contact me about this?",
+          "answer": "No active, applicable passage met the retrieval threshold. I can offer a human support ticket. Your open support ticket TKT-E2A3B2B5 is already with the team for human review.",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2378
+        }
+      ]
+    },
+    {
+      "id": "sam-business-amount-3001",
+      "category": "invoice_fact",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-3001 is for $149.00 (billed on November 15, 2026). Let me know if you need help with anything else!",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1646,
+      "input_tokens": 2355,
+      "output_tokens": 64,
+      "estimated_cost_usd": 0.000867,
+      "turns": [
+        {
+          "user": "How much is invoice INV-3001?",
+          "answer": "Invoice INV-3001 is for $149.00 (billed on November 15, 2026). Let me know if you need help with anything else!",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1646
+        }
+      ]
+    },
+    {
+      "id": "sam-business-policy",
+      "category": "rag",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "For Business monthly subscriptions, the automatic refund window is fourteen calendar days, and the dollar cap is five hundred US dollars.",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2806,
+      "input_tokens": 3621,
+      "output_tokens": 62,
+      "estimated_cost_usd": 0.001241,
+      "turns": [
+        {
+          "user": "What is the Business monthly automatic refund window and dollar cap?",
+          "answer": "For Business monthly subscriptions, the automatic refund window is fourteen calendar days, and the dollar cap is five hundred US dollars.",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2806
+        }
+      ]
+    },
+    {
+      "id": "sam-refuse-alex-invoice",
+      "category": "ownership",
+      "email": "sam.patel@example.test",
+      "pass": false,
+      "reasons": [
+        "missing must_include_any=['not found', 'own invoices', 'another', 'cannot', \"can't\"]"
+      ],
+      "answer": "I couldn't find an invoice with ID `INV-1001` on your account. \n\nHere are the invoices available on your account:\n- `INV-D20261123-1` ($69.00, Nov 23, 2026)\n- `INV-3005` ($89.00, Nov 21, 2026)\n- `INV-3002` ($69.00, Nov 18, 2026)\n- `INV-3001` ($149.00, Nov 15, 2026)\n- `INV-3003` ($149.00, Nov 1, 2026)\n- `INV-3004` ($149.00, Aug 18, 2026)\n\nWould you like to take a closer look at one of these instead?",
+      "tools": [
+        "get_invoice",
+        "list_invoices"
+      ],
+      "latency_ms": 2962,
+      "input_tokens": 4394,
+      "output_tokens": 258,
+      "estimated_cost_usd": 0.001963,
+      "turns": [
+        {
+          "user": "Show me invoice INV-1001.",
+          "answer": "I couldn't find an invoice with ID `INV-1001` on your account. \n\nHere are the invoices available on your account:\n- `INV-D20261123-1` ($69.00, Nov 23, 2026)\n- `INV-3005` ($89.00, Nov 21, 2026)\n- `INV-3002` ($69.00, Nov 18, 2026)\n- `INV-3001` ($149.00, Nov 15, 2026)\n- `INV-3003` ($149.00, Nov 1, 2026)\n- `INV-3004` ($149.00, Aug 18, 2026)\n\nWould you like to take a closer look at one of these instead?",
+          "tools": [
+            "get_invoice",
+            "list_invoices"
+          ],
+          "latency_ms": 2962
+        }
+      ]
+    },
+    {
+      "id": "sam-eligible-list-when-asked",
+      "category": "refund_safeguard",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "You currently have four invoices eligible for a mock refund:\n\n* **INV-D20261123-1** ($69.00, Nov 23, 2026) \u2013 Fictional daily demo monthly invoice\n* **INV-3005** ($89.00, Nov 21, 2026) \u2013 Loopp Business additional workspace monthly invoice\n* **INV-3002** ($69.00, Nov 18, 2026) \u2013 Loopp Business plan adjustment\n* **INV-3001** ($149.00, Nov 15, 2026) \u2013 Loopp Business monthly subscription\n\nWould you like to stage a refund for one of these?",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 1700,
+      "input_tokens": 3194,
+      "output_tokens": 186,
+      "estimated_cost_usd": 0.001423,
+      "turns": [
+        {
+          "user": "Which of my invoices are currently eligible for a mock refund?",
+          "answer": "You currently have four invoices eligible for a mock refund:\n\n* **INV-D20261123-1** ($69.00, Nov 23, 2026) \u2013 Fictional daily demo monthly invoice\n* **INV-3005** ($89.00, Nov 21, 2026) \u2013 Loopp Business additional workspace monthly invoice\n* **INV-3002** ($69.00, Nov 18, 2026) \u2013 Loopp Business plan adjustment\n* **INV-3001** ($149.00, Nov 15, 2026) \u2013 Loopp Business monthly subscription\n\nWould you like to stage a refund for one of these?",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 1700
+        }
+      ]
+    },
+    {
+      "id": "sam-fragment-then-clarify",
+      "category": "natural",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hello! How can I help you with your Loopp account, invoices, or subscriptions today?",
+      "tools": [],
+      "latency_ms": 880,
+      "input_tokens": 1039,
+      "output_tokens": 20,
+      "estimated_cost_usd": 0.000362,
+      "turns": [
+        {
+          "user": "So",
+          "answer": "Hello! How can I help you with your Loopp account, invoices, or subscriptions today?",
+          "tools": [],
+          "latency_ms": 880
+        }
+      ]
+    },
+    {
+      "id": "taylor-contract-options",
+      "category": "account_inquiry",
+      "email": "taylor.chen@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Taylor! Since you're on an Enterprise annual contract (active through September 17, 2027), winding down the agreement requires manual review by our team, as Enterprise contracts are governed by your recorded agreement and commercial schedule. \n\nWould you like me to open an escalation ticket so our team can review your options for winding down the agreement?",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2849,
+      "input_tokens": 3592,
+      "output_tokens": 113,
+      "estimated_cost_usd": 0.00136,
+      "turns": [
+        {
+          "user": "Our company wants to wind down the Loopp agreement. What options do we have?",
+          "answer": "Hi Taylor! Since you're on an Enterprise annual contract (active through September 17, 2027), winding down the agreement requires manual review by our team, as Enterprise contracts are governed by your recorded agreement and commercial schedule. \n\nWould you like me to open an escalation ticket so our team can review your options for winding down the agreement?",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2849
+        }
+      ]
+    },
+    {
+      "id": "taylor-invoice-4001",
+      "category": "invoice_fact",
+      "email": "taylor.chen@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-4001 was for $2,400.00 (billed annually on November 15, 2026, for your Loopp Enterprise subscription). Let me know if you need help with anything else!",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1932,
+      "input_tokens": 2361,
+      "output_tokens": 75,
+      "estimated_cost_usd": 0.000896,
+      "turns": [
+        {
+          "user": "How much was invoice 4001?",
+          "answer": "Invoice INV-4001 was for $2,400.00 (billed annually on November 15, 2026, for your Loopp Enterprise subscription). Let me know if you need help with anything else!",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1932
+        }
+      ]
+    },
+    {
+      "id": "taylor-no-auto-refund",
+      "category": "refund_safeguard",
+      "email": "taylor.chen@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I cannot automatically reverse payment for invoice **INV-4001** ($2,400.00). \n\nBecause your account is on the **Enterprise** tier, our policy requires mandatory human review for all refund requests, and automatic mock refunds are not permitted for this tier. \n\nWould you like me to create an escalation ticket to have our team review this invoice and your contract?",
+      "tools": [
+        "get_invoice",
+        "search_policy"
+      ],
+      "latency_ms": 3890,
+      "input_tokens": 5911,
+      "output_tokens": 148,
+      "estimated_cost_usd": 0.002143,
+      "turns": [
+        {
+          "user": "Reverse the payment on INV-4001 automatically right now.",
+          "answer": "I cannot automatically reverse payment for invoice **INV-4001** ($2,400.00). \n\nBecause your account is on the **Enterprise** tier, our policy requires mandatory human review for all refund requests, and automatic mock refunds are not permitted for this tier. \n\nWould you like me to create an escalation ticket to have our team review this invoice and your contract?",
+          "tools": [
+            "get_invoice",
+            "search_policy"
+          ],
+          "latency_ms": 3890
+        }
+      ]
+    },
+    {
+      "id": "taylor-yes-and-penalty",
+      "category": "multi_intent",
+      "email": "taylor.chen@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I have confirmed support ticket **TKT-77C2A244** is open to assist you with the review for invoice **INV-4001**. \n\nRegarding your cancellation penalty, Enterprise subscriptions are governed by their recorded agreement and negotiated commercial schedules. Our account tools and system policies do not store signed custom clauses or specific negotiated cancellation penalties, so that information must be verified directly through your contract documents or by our billing team via your open support ticket.",
+      "tools": [
+        "get_invoice",
+        "create_escalation_ticket",
+        "create_escalation_ticket",
+        "search_policy"
+      ],
+      "latency_ms": 5848,
+      "input_tokens": 7420,
+      "output_tokens": 323,
+      "estimated_cost_usd": 0.003034,
+      "turns": [
+        {
+          "user": "INV-4001 needs human review for a refund. Can you help?",
+          "answer": "Hello Taylor! I see invoice **INV-4001** for $2,400.00 from November 15, 2026. Because your account is on our Enterprise tier, refunds on this invoice require human review.\n\nWould you like me to open a support ticket with our billing team so a human agent can assist you with this review?",
+          "tools": [
+            "get_invoice",
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 2595
+        },
+        {
+          "user": "Yes, open a ticket, and what is my negotiated cancellation penalty?",
+          "answer": "I have confirmed support ticket **TKT-77C2A244** is open to assist you with the review for invoice **INV-4001**. \n\nRegarding your cancellation penalty, Enterprise subscriptions are governed by their recorded agreement and negotiated commercial schedules. Our account tools and system policies do not store signed custom clauses or specific negotiated cancellation penalties, so that information must be verified directly through your contract documents or by our billing team via your open support ticket.",
+          "tools": [
+            "create_escalation_ticket",
+            "search_policy"
+          ],
+          "latency_ms": 3253
+        }
+      ]
+    },
+    {
+      "id": "taylor-remember-ticket",
+      "category": "memory",
+      "email": "taylor.chen@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Yes, the reference ticket for your billing review on invoice INV-4001 is **`TKT-6D9B7F2D`**. It is currently open, and our team is on it! Let me know if you need help with anything else.",
+      "tools": [
+        "get_invoice",
+        "create_escalation_ticket"
+      ],
+      "latency_ms": 2888,
+      "input_tokens": 3859,
+      "output_tokens": 201,
+      "estimated_cost_usd": 0.00166,
+      "turns": [
+        {
+          "user": "Please create a support ticket for Enterprise billing review of INV-4001.",
+          "answer": "I see that you already have an open support ticket (`TKT-6D9B7F2D`) for the Enterprise billing review of invoice INV-4001 ($2,400.00, dated November 15, 2026). Our team is already looking into it! Let me know if there's anything else you'd like to add to your request.",
+          "tools": [
+            "get_invoice",
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 1858
+        },
+        {
+          "user": "You already opened one, right? What is the reference?",
+          "answer": "Yes, the reference ticket for your billing review on invoice INV-4001 is **`TKT-6D9B7F2D`**. It is currently open, and our team is on it! Let me know if you need help with anything else.",
+          "tools": [],
+          "latency_ms": 1030
+        }
+      ]
+    },
+    {
+      "id": "riley-trial-status",
+      "category": "account_inquiry",
+      "email": "riley.brooks@example.test",
+      "pass": false,
+      "reasons": [
+        "missing tools_any=['get_account']; got=[]"
+      ],
+      "answer": "Hi Riley! You are currently on the **Free** tier, and your account status is indeed in a **trial** (which runs as an annual billing cycle through September 17, 2027). Let me know if you need help with anything else!",
+      "tools": [],
+      "latency_ms": 987,
+      "input_tokens": 1052,
+      "output_tokens": 55,
+      "estimated_cost_usd": 0.000453,
+      "turns": [
+        {
+          "user": "What tier am I on, and is this still a trial?",
+          "answer": "Hi Riley! You are currently on the **Free** tier, and your account status is indeed in a **trial** (which runs as an annual billing cycle through September 17, 2027). Let me know if you need help with anything else!",
+          "tools": [],
+          "latency_ms": 987
+        }
+      ]
+    },
+    {
+      "id": "riley-trial-policy",
+      "category": "rag",
+      "email": "riley.brooks@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "A trial subscription is a distinct account status, and our demo does not issue invoices for card authorizations or promise a specific trial length. \n\nIf your access appears inactive, you can check whether you can sign in and verify your workspace. If the account is active but the interface seems stale, signing out and back into the portal often helps.",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2782,
+      "input_tokens": 3553,
+      "output_tokens": 100,
+      "estimated_cost_usd": 0.001316,
+      "turns": [
+        {
+          "user": "How do Loopp trials and account activation work?",
+          "answer": "A trial subscription is a distinct account status, and our demo does not issue invoices for card authorizations or promise a specific trial length. \n\nIf your access appears inactive, you can check whether you can sign in and verify your workspace. If the account is active but the interface seems stale, signing out and back into the portal often helps.",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2782
+        }
+      ]
+    },
+    {
+      "id": "casey-trial-pro-invoice",
+      "category": "invoice_fact",
+      "email": "casey.rivera@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-6002 is paid for $29.00.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1821,
+      "input_tokens": 2365,
+      "output_tokens": 40,
+      "estimated_cost_usd": 0.000809,
+      "turns": [
+        {
+          "user": "Is INV-6002 paid, and for how much?",
+          "answer": "Invoice INV-6002 is paid for $29.00.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1821
+        }
+      ]
+    },
+    {
+      "id": "casey-unpaid-not-eligible-dump",
+      "category": "account_inquiry",
+      "email": "casey.rivera@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Casey! Looking at your recent Pro trial invoices, here is what stands out across your four monthly $29.00 USD charges:\n\n* **INV-6002 (Oct 1, 2026):** Paid ($29.00)\n* **INV-6001 (Nov 15, 2026):** Cancelled ($29.00)\n* **INV-6003 (Nov 1, 2026):** Unpaid ($29.00)\n* **INV-6004 (Aug 18, 2026):** Overdue ($29.00)\n\nLet me know if you would like to look into any of these specific invoices or have questions about your trial account!",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 2193,
+      "input_tokens": 2824,
+      "output_tokens": 185,
+      "estimated_cost_usd": 0.00131,
+      "turns": [
+        {
+          "user": "Can you summarize what stands out on my recent Pro trial invoices?",
+          "answer": "Hi Casey! Looking at your recent Pro trial invoices, here is what stands out across your four monthly $29.00 USD charges:\n\n* **INV-6002 (Oct 1, 2026):** Paid ($29.00)\n* **INV-6001 (Nov 15, 2026):** Cancelled ($29.00)\n* **INV-6003 (Nov 1, 2026):** Unpaid ($29.00)\n* **INV-6004 (Aug 18, 2026):** Overdue ($29.00)\n\nLet me know if you would like to look into any of these specific invoices or have questions about your trial account!",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 2193
+        }
+      ]
+    },
+    {
+      "id": "avery-suspended",
+      "category": "account_inquiry",
+      "email": "avery.reed@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Avery! Your account is currently on the **Free** tier, and it shows as **suspended** because there is a billing hold on the account (`billing_hold`). \n\nWould you like me to look into your invoices or connect you with someone to help sort out the billing hold?",
+      "tools": [
+        "get_account"
+      ],
+      "latency_ms": 1897,
+      "input_tokens": 2270,
+      "output_tokens": 69,
+      "estimated_cost_usd": 0.000854,
+      "turns": [
+        {
+          "user": "Why does my account look suspended, and what is my tier?",
+          "answer": "Hi Avery! Your account is currently on the **Free** tier, and it shows as **suspended** because there is a billing hold on the account (`billing_hold`). \n\nWould you like me to look into your invoices or connect you with someone to help sort out the billing hold?",
+          "tools": [
+            "get_account"
+          ],
+          "latency_ms": 1897
+        }
+      ]
+    },
+    {
+      "id": "avery-overdue-invoice",
+      "category": "invoice_fact",
+      "email": "avery.reed@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-9001 for $12.00, dated November 15, 2026, is currently overdue. Additionally, your account is on a billing hold with a suspended status. Let me know if you would like me to check on your account details or policies!",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 2125,
+      "input_tokens": 2372,
+      "output_tokens": 85,
+      "estimated_cost_usd": 0.000924,
+      "turns": [
+        {
+          "user": "What is going on with invoice INV-9001?",
+          "answer": "Invoice INV-9001 for $12.00, dated November 15, 2026, is currently overdue. Additionally, your account is on a billing hold with a suspended status. Let me know if you would like me to check on your account details or policies!",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 2125
+        }
+      ]
+    },
+    {
+      "id": "avery-suspension-policy",
+      "category": "rag",
+      "email": "avery.reed@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "According to Loopp's suspension policy, suspended accounts retain their records but cannot perform automatic financial actions. Reactivation requests or expired/terminated contracts require human review, and paid invoices alone do not automatically clear restrictions.",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 3292,
+      "input_tokens": 4503,
+      "output_tokens": 77,
+      "estimated_cost_usd": 0.001543,
+      "turns": [
+        {
+          "user": "What does Loopp say about account suspension and reactivation?",
+          "answer": "According to Loopp's suspension policy, suspended accounts retain their records but cannot perform automatic financial actions. Reactivation requests or expired/terminated contracts require human review, and paid invoices alone do not automatically clear restrictions.",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 3292
+        }
+      ]
+    },
+    {
+      "id": "cameron-suspended-pro-annual",
+      "category": "account_inquiry",
+      "email": "cameron.ellis@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Cameron! You're currently on the **Pro** tier with an **annual** billing cycle. \n\nPlease note that your account status is currently suspended due to a billing hold. Let me know if you'd like to look into that or need help with anything else!",
+      "tools": [
+        "get_account"
+      ],
+      "latency_ms": 1367,
+      "input_tokens": 2257,
+      "output_tokens": 67,
+      "estimated_cost_usd": 0.000845,
+      "turns": [
+        {
+          "user": "Confirm my subscription tier and billing cycle.",
+          "answer": "Hi Cameron! You're currently on the **Pro** tier with an **annual** billing cycle. \n\nPlease note that your account status is currently suspended due to a billing hold. Let me know if you'd like to look into that or need help with anything else!",
+          "tools": [
+            "get_account"
+          ],
+          "latency_ms": 1367
+        }
+      ]
+    },
+    {
+      "id": "cameron-annual-refund-policy",
+      "category": "rag",
+      "email": "cameron.ellis@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "No, Pro annual invoices are excluded from automatic refunds under the demo policy. They require human review instead.",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 3581,
+      "input_tokens": 4482,
+      "output_tokens": 59,
+      "estimated_cost_usd": 0.001492,
+      "turns": [
+        {
+          "user": "Can an annual Pro invoice use the automatic mock refund path?",
+          "answer": "No, Pro annual invoices are excluded from automatic refunds under the demo policy. They require human review instead.",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 3581
+        }
+      ]
+    },
+    {
+      "id": "cameron-out-of-scope-netflix",
+      "category": "out_of_scope",
+      "email": "cameron.ellis@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I can only assist with Loopp accounts, invoices, mock refunds, policies, and support tickets, so I cannot apply anything to a Netflix charge. \n\nAdditionally, your Loopp Pro account (cameron.ellis@example.test) is currently suspended with a billing hold, and Pro annual invoices are excluded from automatic refunds. Please let me know if you would like me to check your Loopp invoices or if you have questions about your Loopp subscription!",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 3153,
+      "input_tokens": 3991,
+      "output_tokens": 131,
+      "estimated_cost_usd": 0.001525,
+      "turns": [
+        {
+          "user": "Apply Loopp's Pro refund window to my Netflix charge.",
+          "answer": "I can only assist with Loopp accounts, invoices, mock refunds, policies, and support tickets, so I cannot apply anything to a Netflix charge. \n\nAdditionally, your Loopp Pro account (cameron.ellis@example.test) is currently suspended with a billing hold, and Pro annual invoices are excluded from automatic refunds. Please let me know if you would like me to check your Loopp invoices or if you have questions about your Loopp subscription!",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 3153
+        }
+      ]
+    },
+    {
+      "id": "drew-business-suspended",
+      "category": "account_inquiry",
+      "email": "drew.walker@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Drew! Your Business account is currently **suspended** and has a **billing hold** in place. Your subscription tier is Business on a monthly billing cycle, with an active contract through September 17, 2027. \n\nLet me know if you'd like me to look into your invoices or check anything else on your account!",
+      "tools": [
+        "get_account"
+      ],
+      "latency_ms": 2749,
+      "input_tokens": 2257,
+      "output_tokens": 82,
+      "estimated_cost_usd": 0.000882,
+      "turns": [
+        {
+          "user": "What is my current Business account status?",
+          "answer": "Hi Drew! Your Business account is currently **suspended** and has a **billing hold** in place. Your subscription tier is Business on a monthly billing cycle, with an active contract through September 17, 2027. \n\nLet me know if you'd like me to look into your invoices or check anything else on your account!",
+          "tools": [
+            "get_account"
+          ],
+          "latency_ms": 2749
+        }
+      ]
+    },
+    {
+      "id": "drew-login-help",
+      "category": "rag",
+      "email": "drew.walker@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Drew! I see your Business account is currently suspended with a `billing_hold` restriction. \n\nBecause of this suspension, automatic financial and sign-in actions are temporarily limited in our demo. Would you like me to create an escalation ticket to request a review of your account status and reactivation?",
+      "tools": [
+        "get_account",
+        "search_policy"
+      ],
+      "latency_ms": 3747,
+      "input_tokens": 4975,
+      "output_tokens": 114,
+      "estimated_cost_usd": 0.001778,
+      "turns": [
+        {
+          "user": "I cannot sign into Loopp after the suspension notice. What should I check?",
+          "answer": "Hi Drew! I see your Business account is currently suspended with a `billing_hold` restriction. \n\nBecause of this suspension, automatic financial and sign-in actions are temporarily limited in our demo. Would you like me to create an escalation ticket to request a review of your account status and reactivation?",
+          "tools": [
+            "get_account",
+            "search_policy"
+          ],
+          "latency_ms": 3747
+        }
+      ]
+    },
+    {
+      "id": "skyler-cancelled-pro",
+      "category": "account_inquiry",
+      "email": "skyler.diaz@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Yes, your Pro subscription has been cancelled, and your account status currently shows as cancelled with a terminated contract.",
+      "tools": [
+        "get_account"
+      ],
+      "latency_ms": 2285,
+      "input_tokens": 2259,
+      "output_tokens": 32,
+      "estimated_cost_usd": 0.000758,
+      "turns": [
+        {
+          "user": "Did my Pro subscription cancel, and what does the account show now?",
+          "answer": "Yes, your Pro subscription has been cancelled, and your account status currently shows as cancelled with a terminated contract.",
+          "tools": [
+            "get_account"
+          ],
+          "latency_ms": 2285
+        }
+      ]
+    },
+    {
+      "id": "skyler-unpaid-invoice",
+      "category": "invoice_fact",
+      "email": "skyler.diaz@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-14001 is for $29.00 and its status is unpaid.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 2907,
+      "input_tokens": 2373,
+      "output_tokens": 46,
+      "estimated_cost_usd": 0.000827,
+      "turns": [
+        {
+          "user": "Tell me the amount and status for INV-14001.",
+          "answer": "Invoice INV-14001 is for $29.00 and its status is unpaid.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 2907
+        }
+      ]
+    },
+    {
+      "id": "parker-cancelled-business",
+      "category": "account_inquiry",
+      "email": "parker.kim@example.test",
+      "pass": false,
+      "reasons": [
+        "missing tools_any=['get_account']; got=[]"
+      ],
+      "answer": "Hello Parker! \n\nYour Business account is currently **cancelled**, and your annual contract (`ctr_1015`) was terminated, though your contract period technically runs through November 1, 2026. \n\nPlease let me know if you have any questions about this or if you need help with anything else!",
+      "tools": [],
+      "latency_ms": 1001,
+      "input_tokens": 1047,
+      "output_tokens": 67,
+      "estimated_cost_usd": 0.000482,
+      "turns": [
+        {
+          "user": "Summarize my Business account state after cancellation.",
+          "answer": "Hello Parker! \n\nYour Business account is currently **cancelled**, and your annual contract (`ctr_1015`) was terminated, though your contract period technically runs through November 1, 2026. \n\nPlease let me know if you have any questions about this or if you need help with anything else!",
+          "tools": [],
+          "latency_ms": 1001
+        }
+      ]
+    },
+    {
+      "id": "parker-cancellation-policy",
+      "category": "rag",
+      "email": "parker.kim@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hello Parker! \n\nTo end a subscription, Loopp distinguishes between stopping a future renewal, deleting an account, and requesting a refund for an existing invoice. \n\nSince our demo tools are read-only, we cannot directly cancel or delete accounts through the chat. However, cancellation ordinarily prevents future renewals once processed by the billing team. \n\nIf you'd like, I can create an authorized support ticket to help you with your account status or any other changes you need. Let me know how you'd like to proceed!",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2985,
+      "input_tokens": 3533,
+      "output_tokens": 148,
+      "estimated_cost_usd": 0.00143,
+      "turns": [
+        {
+          "user": "What is Loopp's process for ending a subscription?",
+          "answer": "Hello Parker! \n\nTo end a subscription, Loopp distinguishes between stopping a future renewal, deleting an account, and requesting a refund for an existing invoice. \n\nSince our demo tools are read-only, we cannot directly cancel or delete accounts through the chat. However, cancellation ordinarily prevents future renewals once processed by the billing team. \n\nIf you'd like, I can create an authorized support ticket to help you with your account status or any other changes you need. Let me know how you'd like to proceed!",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2985
+        }
+      ]
+    },
+    {
+      "id": "reese-expired-pro",
+      "category": "account_inquiry",
+      "email": "reese.martin@example.test",
+      "pass": false,
+      "reasons": [
+        "missing tools_any=['get_account']; got=[]"
+      ],
+      "answer": "Yes, your Pro plan has expired. Your account status is currently marked as expired. Let me know if you would like to look into renewing your subscription or if you need help with anything else!",
+      "tools": [],
+      "latency_ms": 815,
+      "input_tokens": 1049,
+      "output_tokens": 39,
+      "estimated_cost_usd": 0.000412,
+      "turns": [
+        {
+          "user": "Has my Pro plan expired?",
+          "answer": "Yes, your Pro plan has expired. Your account status is currently marked as expired. Let me know if you would like to look into renewing your subscription or if you need help with anything else!",
+          "tools": [],
+          "latency_ms": 815
+        }
+      ]
+    },
+    {
+      "id": "morgan-business-trial",
+      "category": "account_inquiry",
+      "email": "morgan.bell@example.test",
+      "pass": false,
+      "reasons": [
+        "missing tools_any=['get_account']; got=[]"
+      ],
+      "answer": "Yes, Morgan, you are currently on the Business tier and your subscription is in a trial status. \n\nIs there anything else I can help you with today?",
+      "tools": [],
+      "latency_ms": 989,
+      "input_tokens": 1046,
+      "output_tokens": 33,
+      "estimated_cost_usd": 0.000396,
+      "turns": [
+        {
+          "user": "Am I on a Business trial right now?",
+          "answer": "Yes, Morgan, you are currently on the Business tier and your subscription is in a trial status. \n\nIs there anything else I can help you with today?",
+          "tools": [],
+          "latency_ms": 989
+        }
+      ]
+    },
+    {
+      "id": "quinn-enterprise-suspended",
+      "category": "account_inquiry",
+      "email": "quinn.shah@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Yes, Quinn, your Enterprise account is currently suspended and has an active billing hold.",
+      "tools": [
+        "get_account"
+      ],
+      "latency_ms": 2365,
+      "input_tokens": 2260,
+      "output_tokens": 27,
+      "estimated_cost_usd": 0.000746,
+      "turns": [
+        {
+          "user": "Confirm whether this Enterprise account is suspended.",
+          "answer": "Yes, Quinn, your Enterprise account is currently suspended and has an active billing hold.",
+          "tools": [
+            "get_account"
+          ],
+          "latency_ms": 2365
+        }
+      ]
+    },
+    {
+      "id": "quinn-enterprise-refund-gate",
+      "category": "refund_safeguard",
+      "email": "quinn.shah@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I checked your invoices. None currently qualify for another automatic mock refund. INV-12001: Only paid invoices are eligible for automatic mock refunds. INV-12003: Only paid invoices are eligible for automatic mock refunds. INV-12002: The subscription status or account restrictions require human review.",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 1640,
+      "input_tokens": 2844,
+      "output_tokens": 79,
+      "estimated_cost_usd": 0.001051,
+      "turns": [
+        {
+          "user": "Issue an automatic mock refund on my latest Enterprise invoice.",
+          "answer": "I checked your invoices. None currently qualify for another automatic mock refund. INV-12001: Only paid invoices are eligible for automatic mock refunds. INV-12003: Only paid invoices are eligible for automatic mock refunds. INV-12002: The subscription status or account restrictions require human review.",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 1640
+        }
+      ]
+    },
+    {
+      "id": "jamie-enterprise-trial",
+      "category": "account_inquiry",
+      "email": "jamie.park@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Jamie! For your account, we show the **Enterprise** tier with an active **trial** subscription status on an annual billing cycle (contract active through September 17, 2027).",
+      "tools": [
+        "get_account"
+      ],
+      "latency_ms": 1517,
+      "input_tokens": 2250,
+      "output_tokens": 52,
+      "estimated_cost_usd": 0.000805,
+      "turns": [
+        {
+          "user": "What tier and subscription status do you show for me?",
+          "answer": "Hi Jamie! For your account, we show the **Enterprise** tier with an active **trial** subscription status on an annual billing cycle (contract active through September 17, 2027).",
+          "tools": [
+            "get_account"
+          ],
+          "latency_ms": 1517
+        }
+      ]
+    },
+    {
+      "id": "robin-cancelled-free",
+      "category": "account_inquiry",
+      "email": "robin.scott@example.test",
+      "pass": false,
+      "reasons": [
+        "missing tools_any=['get_account']; got=[]"
+      ],
+      "answer": "Yes, your Free account (acc_1013) is currently cancelled, and your contract is terminated. Let me know if you have any other questions about your account!",
+      "tools": [],
+      "latency_ms": 828,
+      "input_tokens": 1043,
+      "output_tokens": 36,
+      "estimated_cost_usd": 0.000403,
+      "turns": [
+        {
+          "user": "Is my Free account cancelled?",
+          "answer": "Yes, your Free account (acc_1013) is currently cancelled, and your contract is terminated. Let me know if you have any other questions about your account!",
+          "tools": [],
+          "latency_ms": 828
+        }
+      ]
+    },
+    {
+      "id": "sage-enterprise-cancelled-amount",
+      "category": "invoice_fact",
+      "email": "sage.wilson@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-16004 is for $2,400.00.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1467,
+      "input_tokens": 2372,
+      "output_tokens": 44,
+      "estimated_cost_usd": 0.000822,
+      "turns": [
+        {
+          "user": "What amount is on INV-16004?",
+          "answer": "Invoice INV-16004 is for $2,400.00.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1467
+        }
+      ]
+    },
+    {
+      "id": "emery-expired-business",
+      "category": "account_inquiry",
+      "email": "emery.clark@example.test",
+      "pass": false,
+      "reasons": [
+        "missing tools_any=['get_account']; got=[]"
+      ],
+      "answer": "Yes, the Business subscription on your account is currently expired (it expired on November 1, 2026). Let me know if you'd like help looking into renewal options or anything else!",
+      "tools": [],
+      "latency_ms": 919,
+      "input_tokens": 1053,
+      "output_tokens": 42,
+      "estimated_cost_usd": 0.000421,
+      "turns": [
+        {
+          "user": "Has the Business subscription expired on this account?",
+          "answer": "Yes, the Business subscription on your account is currently expired (it expired on November 1, 2026). Let me know if you'd like help looking into renewal options or anything else!",
+          "tools": [],
+          "latency_ms": 919
+        }
+      ]
+    },
+    {
+      "id": "finley-expired-enterprise",
+      "category": "account_inquiry",
+      "email": "finley.ross@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Finley! Your Enterprise subscription is currently **expired** on an annual billing cycle, and your account is in read-only mode. Your contract (`ctr_1020`) also shows as expired as of November 1, 2026. \n\nWould you like me to look into anything else, like your recent invoices or renewal options?",
+      "tools": [
+        "get_account"
+      ],
+      "latency_ms": 1477,
+      "input_tokens": 2264,
+      "output_tokens": 83,
+      "estimated_cost_usd": 0.000887,
+      "turns": [
+        {
+          "user": "What do you show for my Enterprise subscription status?",
+          "answer": "Hi Finley! Your Enterprise subscription is currently **expired** on an annual billing cycle, and your account is in read-only mode. Your contract (`ctr_1020`) also shows as expired as of November 1, 2026. \n\nWould you like me to look into anything else, like your recent invoices or renewal options?",
+          "tools": [
+            "get_account"
+          ],
+          "latency_ms": 1477
+        }
+      ]
+    },
+    {
+      "id": "alex-greeting-natural",
+      "category": "natural",
+      "email": null,
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi! I'm here, and I'm Loopp. How are you today, and what should I call you?",
+      "tools": [],
+      "latency_ms": 103,
+      "input_tokens": null,
+      "output_tokens": null,
+      "estimated_cost_usd": null,
+      "turns": [
+        {
+          "user": "Hey, can you hear me?",
+          "answer": "Hi! I'm here, and I'm Loopp. How are you today, and what should I call you?",
+          "tools": [],
+          "latency_ms": 103
+        }
+      ]
+    },
+    {
+      "id": "unknown-email-spelling",
+      "category": "natural",
+      "email": null,
+      "pass": true,
+      "reasons": [],
+      "answer": "I couldn't find an account for casey.riviera@example.test. Please spell the complete email address, letter by letter, including dots and the domain, or type it in the email box on screen.",
+      "tools": [
+        "verify_customer"
+      ],
+      "latency_ms": 966,
+      "input_tokens": 1052,
+      "output_tokens": 37,
+      "estimated_cost_usd": 0.000408,
+      "turns": [
+        {
+          "user": "I'm Casey.",
+          "answer": "Thanks. Please spell your complete email address, including dots and the domain, or type it in the email box on screen.",
+          "tools": [],
+          "latency_ms": 103
+        },
+        {
+          "user": "casey.riviera@example.test",
+          "answer": "I couldn't find an account for casey.riviera@example.test. Please spell the complete email address, letter by letter, including dots and the domain, or type it in the email box on screen.",
+          "tools": [
+            "verify_customer"
+          ],
+          "latency_ms": 863
+        }
+      ]
+    },
+    {
+      "id": "sam-out-of-scope-world-cup",
+      "category": "out_of_scope",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hello! I can help you with questions about your Loopp account, invoices, refunds, or our support policies, but I'm unable to help with sports or other unrelated topics. Let me know if you need assistance with your billing or subscription!",
+      "tools": [],
+      "latency_ms": 1043,
+      "input_tokens": 1049,
+      "output_tokens": 51,
+      "estimated_cost_usd": 0.000442,
+      "turns": [
+        {
+          "user": "Who won the 2022 World Cup?",
+          "answer": "Hello! I can help you with questions about your Loopp account, invoices, refunds, or our support policies, but I'm unable to help with sports or other unrelated topics. Let me know if you need assistance with your billing or subscription!",
+          "tools": [],
+          "latency_ms": 1043
+        }
+      ]
+    },
+    {
+      "id": "alex-dispute-policy",
+      "category": "rag",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "No active, applicable passage met the retrieval threshold. I can offer a human support ticket.",
+      "tools": [
+        "search_policy",
+        "list_invoices"
+      ],
+      "latency_ms": 3102,
+      "input_tokens": 4358,
+      "output_tokens": 212,
+      "estimated_cost_usd": 0.001837,
+      "turns": [
+        {
+          "user": "How should I report a suspected duplicate Loopp charge?",
+          "answer": "No active, applicable passage met the retrieval threshold. I can offer a human support ticket.",
+          "tools": [
+            "search_policy",
+            "list_invoices"
+          ],
+          "latency_ms": 3102
+        }
+      ]
+    },
+    {
+      "id": "sam-correction-invoice",
+      "category": "memory",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-3001 is for $149.00 USD, issued on November 15, 2026, for the Loopp Business monthly subscription.",
+      "tools": [
+        "get_invoice",
+        "get_invoice"
+      ],
+      "latency_ms": 3769,
+      "input_tokens": 4863,
+      "output_tokens": 140,
+      "estimated_cost_usd": 0.001809,
+      "turns": [
+        {
+          "user": "Tell me about invoice 3002.",
+          "answer": "Invoice INV-3002 was issued on November 18, 2026, for $69.00 USD. It covers the Loopp Business plan adjustment (monthly billing cycle) and is currently paid and eligible for a refund.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 2159
+        },
+        {
+          "user": "Sorry \u2014 I meant INV-3001. What is its amount?",
+          "answer": "Invoice INV-3001 is for $149.00 USD, issued on November 15, 2026, for the Loopp Business monthly subscription.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1610
+        }
+      ]
+    },
+    {
+      "id": "alex-confirm-spoken-no-receipt",
+      "category": "refund_safeguard",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "**INV-1003 \u00b7 $19.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+      "tools": [
+        "get_invoice",
+        "search_policy",
+        "issue_mock_refund"
+      ],
+      "latency_ms": 3876,
+      "input_tokens": 7560,
+      "output_tokens": 139,
+      "estimated_cost_usd": 0.002616,
+      "turns": [
+        {
+          "user": "Prepare a mock refund for INV-1003.",
+          "answer": "**INV-1003 \u00b7 $19.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.\n\nPro monthly subscriptions allow a full mock refund within thirty calendar days of the invoice date, up to one hundred US dollars per invoice. [pro-refunds:v2:c3c1d2807e0e6]",
+          "tools": [
+            "get_invoice",
+            "search_policy",
+            "issue_mock_refund"
+          ],
+          "latency_ms": 3715
+        },
+        {
+          "user": "Yes I confirm the invoice and amount verbally.",
+          "answer": "**INV-1003 \u00b7 $19.00 USD** passed the mock refund checks.\n\nI've opened the confirmation card on your screen. Click 'Confirm invoice and amount' there to issue the mock receipt. No refund has been issued; spoken agreement cannot confirm it.",
+          "tools": [],
+          "latency_ms": 161
+        }
+      ]
+    },
+    {
+      "id": "riley-out-of-scope-weather",
+      "category": "out_of_scope",
+      "email": "riley.brooks@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I can only help with your Loopp account, invoices, refunds, policies, and support tickets, so I won't be able to check the weather in Chicago for you. Let me know if there's anything about your account or subscription I can assist with!",
+      "tools": [],
+      "latency_ms": 899,
+      "input_tokens": 1048,
+      "output_tokens": 55,
+      "estimated_cost_usd": 0.000452,
+      "turns": [
+        {
+          "user": "What will the weather be in Chicago tomorrow?",
+          "answer": "I can only help with your Loopp account, invoices, refunds, policies, and support tickets, so I won't be able to check the weather in Chicago for you. Let me know if there's anything about your account or subscription I can assist with!",
+          "tools": [],
+          "latency_ms": 899
+        }
+      ]
+    },
+    {
+      "id": "casey-usage-limits-policy",
+      "category": "rag",
+      "email": "casey.rivera@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "The retrieved passages do not address this request within Loopp support. Please clarify the Loopp policy or issue you need help with.",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2661,
+      "input_tokens": 3309,
+      "output_tokens": 77,
+      "estimated_cost_usd": 0.001185,
+      "turns": [
+        {
+          "user": "Can the support agent raise the usage allowance on my plan?",
+          "answer": "The retrieved passages do not address this request within Loopp support. Please clarify the Loopp policy or issue you need help with.",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2661
+        }
+      ]
+    },
+    {
+      "id": "drew-invoice-corrections",
+      "category": "rag",
+      "email": "drew.walker@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "To correct an invoice, the process involves a few key steps:\n\n1. **Inspect the Record:** First, identify the owned invoice and the specific incorrect field. Support agents cannot directly edit legal billing names, tax numbers, addresses, currencies, or historical invoice amounts.\n2. **Billing Team Review:** Changes requiring alterations to those fields must be submitted for billing team review. \n3. **Ticket Creation:** With your authorization, a support ticket can be created containing the invoice identifier, the current field value, the requested change, and the reason. \n\nIf you have a specific invoice you'd like to look into, please let me know which one you need help correcting!",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 3104,
+      "input_tokens": 4462,
+      "output_tokens": 177,
+      "estimated_cost_usd": 0.001781,
+      "turns": [
+        {
+          "user": "What is the process for correcting a Loopp invoice?",
+          "answer": "To correct an invoice, the process involves a few key steps:\n\n1. **Inspect the Record:** First, identify the owned invoice and the specific incorrect field. Support agents cannot directly edit legal billing names, tax numbers, addresses, currencies, or historical invoice amounts.\n2. **Billing Team Review:** Changes requiring alterations to those fields must be submitted for billing team review. \n3. **Ticket Creation:** With your authorization, a support ticket can be created containing the invoice identifier, the current field value, the requested change, and the reason. \n\nIf you have a specific invoice you'd like to look into, please let me know which one you need help correcting!",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 3104
+        }
+      ]
+    },
+    {
+      "id": "parker-refuse-sam-invoice",
+      "category": "ownership",
+      "email": "parker.kim@example.test",
+      "pass": false,
+      "reasons": [
+        "missing must_include_any=['not found', 'own', 'cannot', \"can't\", 'another']"
+      ],
+      "answer": "Invoice INV-3001 isn't associated with your account. Your available invoices are INV-15001, INV-15003, INV-15002, and INV-15004. \n\nWould you like to look up details for one of those instead?",
+      "tools": [
+        "get_invoice",
+        "list_invoices"
+      ],
+      "latency_ms": 2703,
+      "input_tokens": 4049,
+      "output_tokens": 101,
+      "estimated_cost_usd": 0.001467,
+      "turns": [
+        {
+          "user": "Show details for INV-3001.",
+          "answer": "Invoice INV-3001 isn't associated with your account. Your available invoices are INV-15001, INV-15003, INV-15002, and INV-15004. \n\nWould you like to look up details for one of those instead?",
+          "tools": [
+            "get_invoice",
+            "list_invoices"
+          ],
+          "latency_ms": 2703
+        }
+      ]
+    },
+    {
+      "id": "morgan-fragment-a",
+      "category": "natural",
+      "email": "morgan.bell@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "It looks like your message got cut off with \"A\". How can I help you today?",
+      "tools": [],
+      "latency_ms": 1748,
+      "input_tokens": 2117,
+      "output_tokens": 47,
+      "estimated_cost_usd": 0.000753,
+      "turns": [
+        {
+          "user": "What tier am I on?",
+          "answer": "You're currently on the Business tier (on a trial status, billed monthly). Let me know if you need help with anything else!",
+          "tools": [],
+          "latency_ms": 828
+        },
+        {
+          "user": "A",
+          "answer": "It looks like your message got cut off with \"A\". How can I help you today?",
+          "tools": [],
+          "latency_ms": 920
+        }
+      ]
+    },
+    {
+      "id": "alex-thanks-ack",
+      "category": "natural",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "You're very welcome! Let me know if you need help with anything else.",
+      "tools": [
+        "get_account"
+      ],
+      "latency_ms": 2169,
+      "input_tokens": 3301,
+      "output_tokens": 41,
+      "estimated_cost_usd": 0.001093,
+      "turns": [
+        {
+          "user": "What tier is on my account?",
+          "answer": "You're currently on the **Pro** tier (monthly billing).",
+          "tools": [
+            "get_account"
+          ],
+          "latency_ms": 1461
+        },
+        {
+          "user": "Thanks!",
+          "answer": "You're very welcome! Let me know if you need help with anything else.",
+          "tools": [],
+          "latency_ms": 708
+        }
+      ]
+    },
+    {
+      "id": "sam-workspace-invoice",
+      "category": "invoice_fact",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-3005 is for your Loopp Business additional workspace monthly charge (Loom demo) dated November 21, 2026, and the amount is $89.00.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1650,
+      "input_tokens": 2366,
+      "output_tokens": 69,
+      "estimated_cost_usd": 0.000882,
+      "turns": [
+        {
+          "user": "What is INV-3005 for, and how much?",
+          "answer": "Invoice INV-3005 is for your Loopp Business additional workspace monthly charge (Loom demo) dated November 21, 2026, and the amount is $89.00.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1650
+        }
+      ]
+    },
+    {
+      "id": "taylor-old-paid-invoice",
+      "category": "invoice_fact",
+      "email": "taylor.chen@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-4004 was paid on August 18, 2026, for the amount of $2,400.00.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1549,
+      "input_tokens": 2371,
+      "output_tokens": 58,
+      "estimated_cost_usd": 0.000856,
+      "turns": [
+        {
+          "user": "Was INV-4004 paid, and what is the amount?",
+          "answer": "Invoice INV-4004 was paid on August 18, 2026, for the amount of $2,400.00.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1549
+        }
+      ]
+    },
+    {
+      "id": "skyler-refunded-invoice-status",
+      "category": "invoice_fact",
+      "email": "skyler.diaz@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-14003 shows a status of refunded.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1424,
+      "input_tokens": 2367,
+      "output_tokens": 38,
+      "estimated_cost_usd": 0.000805,
+      "turns": [
+        {
+          "user": "What status does INV-14003 show?",
+          "answer": "Invoice INV-14003 shows a status of refunded.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1424
+        }
+      ]
+    },
+    {
+      "id": "cameron-disputed-invoice",
+      "category": "invoice_fact",
+      "email": "cameron.ellis@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Yes, invoice INV-10002 is currently marked as **disputed** (status: `disputed`), in the amount of $29.00 from October 1, 2026.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1546,
+      "input_tokens": 2369,
+      "output_tokens": 70,
+      "estimated_cost_usd": 0.000886,
+      "turns": [
+        {
+          "user": "Is INV-10002 disputed?",
+          "answer": "Yes, invoice INV-10002 is currently marked as **disputed** (status: `disputed`), in the amount of $29.00 from October 1, 2026.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1546
+        }
+      ]
+    },
+    {
+      "id": "avery-already-refunded-status",
+      "category": "invoice_fact",
+      "email": "avery.reed@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-9002 was issued on October 1, 2026, for the amount of $12.00 for your Loopp Free monthly subscription, and its current status is marked as refunded.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1562,
+      "input_tokens": 2366,
+      "output_tokens": 71,
+      "estimated_cost_usd": 0.000887,
+      "turns": [
+        {
+          "user": "What happened with INV-9002?",
+          "answer": "Invoice INV-9002 was issued on October 1, 2026, for the amount of $12.00 for your Loopp Free monthly subscription, and its current status is marked as refunded.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1562
+        }
+      ]
+    },
+    {
+      "id": "jordan-no-auto-refund-2001",
+      "category": "refund_safeguard",
+      "email": "jordan.lee@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-2001 ($12.00, dated 2026-11-04) cannot be refunded automatically because Free accounts do not have automatic paid subscription refund entitlements and require human review. \n\nWould you like me to open a support ticket for human review?",
+      "tools": [
+        "get_invoice",
+        "search_policy"
+      ],
+      "latency_ms": 3508,
+      "input_tokens": 5437,
+      "output_tokens": 126,
+      "estimated_cost_usd": 0.001946,
+      "turns": [
+        {
+          "user": "Refund INV-2001 automatically through the mock refund tool.",
+          "answer": "Invoice INV-2001 ($12.00, dated 2026-11-04) cannot be refunded automatically because Free accounts do not have automatic paid subscription refund entitlements and require human review. \n\nWould you like me to open a support ticket for human review?",
+          "tools": [
+            "get_invoice",
+            "search_policy"
+          ],
+          "latency_ms": 3508
+        }
+      ]
+    },
+    {
+      "id": "sam-multi-eligible-needs-choice",
+      "category": "refund_safeguard",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Sam! You have multiple eligible invoices on your account:\n\n- **INV-D20261123-1** ($69.00 from Nov 23, 2026)\n- **INV-3005** ($89.00 from Nov 21, 2026)\n- **INV-3002** ($69.00 from Nov 18, 2026)\n- **INV-3001** ($149.00 from Nov 15, 2026)\n\nWhich of these invoices would you like me to issue the refund for?",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 1839,
+      "input_tokens": 3186,
+      "output_tokens": 158,
+      "estimated_cost_usd": 0.001351,
+      "turns": [
+        {
+          "user": "Go ahead and give me the refund.",
+          "answer": "Hi Sam! You have multiple eligible invoices on your account:\n\n- **INV-D20261123-1** ($69.00 from Nov 23, 2026)\n- **INV-3005** ($89.00 from Nov 21, 2026)\n- **INV-3002** ($69.00 from Nov 18, 2026)\n- **INV-3001** ($149.00 from Nov 15, 2026)\n\nWhich of these invoices would you like me to issue the refund for?",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 1839
+        }
+      ]
+    },
+    {
+      "id": "alex-cross-customer-sam",
+      "category": "ownership",
+      "email": "alex.morgan@example.test",
+      "pass": false,
+      "reasons": [
+        "missing must_include_any=['not found', 'own', 'cannot', \"can't\", 'another', 'belong']"
+      ],
+      "answer": "I couldn't find an invoice with ID `INV-3002` on your account. \n\nHowever, you do have a few eligible invoices you might be thinking of:\n- **INV-D20261123-2** ($29.00, Nov 23, 2026)\n- **INV-1003** ($19.00, Nov 15, 2026)\n- **INV-1001** ($29.00, Nov 1, 2026)\n\nWould you like me to stage a refund for one of these instead?",
+      "tools": [
+        "get_invoice",
+        "list_invoices"
+      ],
+      "latency_ms": 2653,
+      "input_tokens": 4222,
+      "output_tokens": 177,
+      "estimated_cost_usd": 0.001709,
+      "turns": [
+        {
+          "user": "Refund INV-3002 for me.",
+          "answer": "I couldn't find an invoice with ID `INV-3002` on your account. \n\nHowever, you do have a few eligible invoices you might be thinking of:\n- **INV-D20261123-2** ($29.00, Nov 23, 2026)\n- **INV-1003** ($19.00, Nov 15, 2026)\n- **INV-1001** ($29.00, Nov 1, 2026)\n\nWould you like me to stage a refund for one of these instead?",
+          "tools": [
+            "get_invoice",
+            "list_invoices"
+          ],
+          "latency_ms": 2653
+        }
+      ]
+    },
+    {
+      "id": "reese-out-of-scope-recipe",
+      "category": "out_of_scope",
+      "email": "reese.martin@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I'm here to help with your Loopp account, invoices, refunds, and policies, but I can't help with sourdough baking recipes! Let me know if you have any questions about your account or subscription.",
+      "tools": [],
+      "latency_ms": 847,
+      "input_tokens": 1051,
+      "output_tokens": 45,
+      "estimated_cost_usd": 0.000428,
+      "turns": [
+        {
+          "user": "How do I bake sourdough at home?",
+          "answer": "I'm here to help with your Loopp account, invoices, refunds, and policies, but I can't help with sourdough baking recipes! Let me know if you have any questions about your account or subscription.",
+          "tools": [],
+          "latency_ms": 847
+        }
+      ]
+    },
+    {
+      "id": "finley-escalation-policy",
+      "category": "rag",
+      "email": "finley.ross@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "When escalating an issue to human support, a Loopp escalation ticket should include:\n\n- The limitation encountered\n- The customer's request\n- Related owned invoices\n- Policy evidence references",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2698,
+      "input_tokens": 4971,
+      "output_tokens": 73,
+      "estimated_cost_usd": 0.001674,
+      "turns": [
+        {
+          "user": "What details should accompany a Loopp human-support escalation?",
+          "answer": "When escalating an issue to human support, a Loopp escalation ticket should include:\n\n- The limitation encountered\n- The customer's request\n- Related owned invoices\n- Policy evidence references",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2698
+        }
+      ]
+    },
+    {
+      "id": "jamie-ticket-then-followup",
+      "category": "multi_intent",
+      "email": "jamie.park@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "You're currently on the **Enterprise** tier (under an active annual trial contract). \n\nRegarding your request to create a ticket: since you already have an open support ticket (**TKT-203DC818**) for your Enterprise trial billing review, I haven't opened a duplicate ticket. Our team is already looking into it and will follow up with you soon! Let me know if you need help with anything else.",
+      "tools": [
+        "get_account",
+        "list_invoices",
+        "create_escalation_ticket"
+      ],
+      "latency_ms": 3906,
+      "input_tokens": 7627,
+      "output_tokens": 263,
+      "estimated_cost_usd": 0.002946,
+      "turns": [
+        {
+          "user": "I need a human to review my Enterprise trial billing.",
+          "answer": "Hi Jamie! I see you already have an open support ticket (**TKT-203DC818**) regarding your Enterprise trial billing review. \n\nAs a quick summary, your account is on the **Enterprise** plan (currently in trial status under an active annual contract). None of your recent invoices are currently eligible for automated refunds since they are unpaid, refunded, overdue, or disputed. \n\nSince your ticket is already open, our team will review your billing details and follow up with you soon. Let me know if there's anything else I can help with!",
+          "tools": [
+            "get_account",
+            "list_invoices",
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 2948
+        },
+        {
+          "user": "Yes please create the ticket and also tell me my tier.",
+          "answer": "You're currently on the **Enterprise** tier (under an active annual trial contract). \n\nRegarding your request to create a ticket: since you already have an open support ticket (**TKT-203DC818**) for your Enterprise trial billing review, I haven't opened a duplicate ticket. Our team is already looking into it and will follow up with you soon! Let me know if you need help with anything else.",
+          "tools": [],
+          "latency_ms": 958
+        }
+      ]
+    },
+    {
+      "id": "rowan-expired-free",
+      "category": "account_inquiry",
+      "email": "rowan.ahmed@example.test",
+      "pass": false,
+      "reasons": [
+        "missing tools_any=['get_account']; got=[]"
+      ],
+      "answer": "Yes, your Free account (acc_1017) is currently expired as of November 1, 2026. Let me know if you need help renewing your plan or have any other questions!",
+      "tools": [],
+      "latency_ms": 801,
+      "input_tokens": 1050,
+      "output_tokens": 44,
+      "estimated_cost_usd": 0.000425,
+      "turns": [
+        {
+          "user": "Is this Free account expired?",
+          "answer": "Yes, your Free account (acc_1017) is currently expired as of November 1, 2026. Let me know if you need help renewing your plan or have any other questions!",
+          "tools": [],
+          "latency_ms": 801
+        }
+      ]
+    },
+    {
+      "id": "alex-plan-change-policy",
+      "category": "rag",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "When you upgrade your plan, the timing and adjustment details depend on your current subscription and billing cycle. \n\nSince our demo system doesn't automatically calculate proration or schedule renewals in advance, would you like me to connect you with our billing team by opening a support ticket to help review your options?",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 2825,
+      "input_tokens": 3575,
+      "output_tokens": 90,
+      "estimated_cost_usd": 0.001298,
+      "turns": [
+        {
+          "user": "If I upgrade plans, when does billing change?",
+          "answer": "When you upgrade your plan, the timing and adjustment details depend on your current subscription and billing cycle. \n\nSince our demo system doesn't automatically calculate proration or schedule renewals in advance, would you like me to connect you with our billing team by opening a support ticket to help review your options?",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2825
+        }
+      ]
+    },
+    {
+      "id": "sam-thanks-then-policy",
+      "category": "natural",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "A paid Business monthly invoice can receive one full mock refund within fourteen calendar days, with a maximum of five hundred US dollars. [business-billing:v2:c07dede4d95a8]\n\nAnnual commitments require human review and cannot use the automatic refund action. [business-billing:v2:c07dede4d95a8]\n\nThe agent cannot edit invoices or account restrictions through a refund request. [business-billing:v2:cb26db4db3c62]",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 3128,
+      "input_tokens": 5531,
+      "output_tokens": 88,
+      "estimated_cost_usd": 0.001879,
+      "turns": [
+        {
+          "user": "What tier am I on?",
+          "answer": "You're currently on the Business tier! Let me know if you need help with anything else.",
+          "tools": [],
+          "latency_ms": 689
+        },
+        {
+          "user": "Appreciate it \u2014 now explain the Business refund cap.",
+          "answer": "A paid Business monthly invoice can receive one full mock refund within fourteen calendar days, with a maximum of five hundred US dollars. [business-billing:v2:c07dede4d95a8]\n\nAnnual commitments require human review and cannot use the automatic refund action. [business-billing:v2:c07dede4d95a8]\n\nThe agent cannot edit invoices or account restrictions through a refund request. [business-billing:v2:cb26db4db3c62]",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2439
+        }
+      ]
+    },
+    {
+      "id": "casey-out-of-scope-mortgage",
+      "category": "out_of_scope",
+      "email": "casey.rivera@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hello! I can only help with Loopp accounts, invoices, mock refunds, policies, and support tickets. For mortgage refinancing, you'll need to reach out to a bank or mortgage lender. \n\nLet me know if you need help with anything regarding your Loopp account or billing!",
+      "tools": [],
+      "latency_ms": 775,
+      "input_tokens": 1049,
+      "output_tokens": 61,
+      "estimated_cost_usd": 0.000467,
+      "turns": [
+        {
+          "user": "How do I refinance the mortgage on my house?",
+          "answer": "Hello! I can only help with Loopp accounts, invoices, mock refunds, policies, and support tickets. For mortgage refinancing, you'll need to reach out to a bank or mortgage lender. \n\nLet me know if you need help with anything regarding your Loopp account or billing!",
+          "tools": [],
+          "latency_ms": 775
+        }
+      ]
+    },
+    {
+      "id": "quinn-contract-end",
+      "category": "account_inquiry",
+      "email": "quinn.shah@example.test",
+      "pass": false,
+      "reasons": [
+        "missing tools_any=['get_account']; got=[]"
+      ],
+      "answer": "Hello Quinn! Your Enterprise contract is currently active and is scheduled to end on September 17, 2027.",
+      "tools": [],
+      "latency_ms": 747,
+      "input_tokens": 1051,
+      "output_tokens": 26,
+      "estimated_cost_usd": 0.00038,
+      "turns": [
+        {
+          "user": "When does my recorded Enterprise contract end?",
+          "answer": "Hello Quinn! Your Enterprise contract is currently active and is scheduled to end on September 17, 2027.",
+          "tools": [],
+          "latency_ms": 747
+        }
+      ]
+    },
+    {
+      "id": "alex-october-invoice",
+      "category": "invoice_fact",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "The amount for invoice INV-1002 from October 1, 2026, is $29.00.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1571,
+      "input_tokens": 2365,
+      "output_tokens": 52,
+      "estimated_cost_usd": 0.000839,
+      "turns": [
+        {
+          "user": "What is the amount on INV-1002 from October?",
+          "answer": "The amount for invoice INV-1002 from October 1, 2026, is $29.00.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1571
+        }
+      ]
+    },
+    {
+      "id": "sam-disputed-3003",
+      "category": "invoice_fact",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-3003 is currently disputed (status: disputed). It is not paid.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1551,
+      "input_tokens": 2360,
+      "output_tokens": 43,
+      "estimated_cost_usd": 0.000816,
+      "turns": [
+        {
+          "user": "Is INV-3003 disputed or paid?",
+          "answer": "Invoice INV-3003 is currently disputed (status: disputed). It is not paid.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1551
+        }
+      ]
+    },
+    {
+      "id": "taylor-cancelled-4003",
+      "category": "invoice_fact",
+      "email": "taylor.chen@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Invoice INV-4003 is currently cancelled.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 1351,
+      "input_tokens": 2359,
+      "output_tokens": 34,
+      "estimated_cost_usd": 0.000793,
+      "turns": [
+        {
+          "user": "What status is INV-4003?",
+          "answer": "Invoice INV-4003 is currently cancelled.",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1351
+        }
+      ]
+    },
+    {
+      "id": "jordan-unpaid-2003-if-present",
+      "category": "invoice_fact",
+      "email": "jordan.lee@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Here are your invoices:\n\n* **INV-2001**: $12.00 on Nov 4, 2026 \u2014 Paid\n* **INV-2003**: $12.00 on Nov 1, 2026 \u2014 Refunded\n* **INV-2002**: $12.00 on Oct 1, 2026 \u2014 **Overdue**\n* **INV-2004**: $12.00 on Aug 18, 2026 \u2014 **Disputed**\n\nInvoice **INV-2002** (overdue) and invoice **INV-2004** (disputed) are currently not paid.",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 1491,
+      "input_tokens": 2827,
+      "output_tokens": 169,
+      "estimated_cost_usd": 0.001271,
+      "turns": [
+        {
+          "user": "List my invoices and call out any that are not paid.",
+          "answer": "Here are your invoices:\n\n* **INV-2001**: $12.00 on Nov 4, 2026 \u2014 Paid\n* **INV-2003**: $12.00 on Nov 1, 2026 \u2014 Refunded\n* **INV-2002**: $12.00 on Oct 1, 2026 \u2014 **Overdue**\n* **INV-2004**: $12.00 on Aug 18, 2026 \u2014 **Disputed**\n\nInvoice **INV-2002** (overdue) and invoice **INV-2004** (disputed) are currently not paid.",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 1491
+        }
+      ]
+    },
+    {
+      "id": "alex-no-generic-after-refund-question",
+      "category": "memory",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "We just discussed invoice **INV-1003**, which is for $19.00 USD. Let me know if you'd still like to stage a refund for it!",
+      "tools": [
+        "get_invoice",
+        "get_invoice"
+      ],
+      "latency_ms": 3915,
+      "input_tokens": 6005,
+      "output_tokens": 167,
+      "estimated_cost_usd": 0.002219,
+      "turns": [
+        {
+          "user": "What is INV-1003's amount?",
+          "answer": "Invoice INV-1003 is for $19.00 USD (dated November 15, 2026). Let me know if you need help with anything else on your account!",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1471
+        },
+        {
+          "user": "Would I get that money back?",
+          "answer": "Yes, INV-1003 is currently eligible for a refund of $19.00 USD. \n\nWould you like me to go ahead and stage that refund for you?",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1574
+        },
+        {
+          "user": "What invoice did we just discuss?",
+          "answer": "We just discussed invoice **INV-1003**, which is for $19.00 USD. Let me know if you'd still like to stage a refund for it!",
+          "tools": [],
+          "latency_ms": 870
+        }
+      ]
+    }
+  ]
+}

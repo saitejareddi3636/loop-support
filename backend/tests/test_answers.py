@@ -16,7 +16,7 @@ class AnswerTests(unittest.TestCase):
         reply = refund_reply(result, "Exact retrieved policy sentence. [retrieved-source]")
         self.assertTrue(reply.startswith("**INV-EXAMPLE · $123.45 USD**"))
         self.assertIn("No refund has been issued", reply)
-        self.assertLess(reply.index("Confirm the invoice"), reply.index("Exact retrieved"))
+        self.assertLess(reply.index("Confirm invoice and amount"), reply.index("Exact retrieved"))
 
     def test_failed_check_never_claims_eligibility(self):
         reply = refund_reply({"error": "Invoice belongs to another customer."})

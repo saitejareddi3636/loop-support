@@ -212,10 +212,14 @@ def create_ticket(chat_id, category, reason):
         )
         previous = next((m["content"].lower() for m in messages if m["role"] == "assistant"), "")
         accepted = bool(
-            chat["escalation"]
-            and re.fullmatch(r"(yes|yes please|please do|go ahead)[.! ]*", latest)
+            re.match(r"(?i)^\s*(yes|yeah|yep|yes please|please do|go ahead)\b", latest)
+            and not re.search(
+                r"(?i)\b(?:do not|don't|no|never mind|not now)\b.{0,20}\b(?:ticket|escalat|human)\b",
+                latest,
+            )
             and re.search(
-                r"(?i)(would you like|shall i|want me to).{0,100}(ticket|human)", previous
+                r"(?i)(would you like|shall i|want me to|i can).{0,120}(ticket|human|support team)",
+                previous,
             )
         )
         if not explicit and not accepted:

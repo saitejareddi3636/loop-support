@@ -18,6 +18,47 @@ certificate owner requires a replacement certificate and an updated bind path.
 PostgreSQL has a separate private CA and a certificate for `db`; application
 connections use `sslmode=verify-full`. Renew its server certificate before expiry.
 
+## Paused legacy application on the shared Oracle VM
+
+On November 23, 2026, the legacy Compose project `loop-ai` was paused to free
+resources for Loopp. Its containers are `loopp-api`, `loopp-caddy`, and
+`loopp-db`. Their original restart policy was `unless-stopped`; the paused
+containers have restart policy `no`. The separate `loopp-support` project stays
+running. No containers, images, volumes, databases, files, or configuration
+were removed.
+
+To verify the paused state on `129.80.125.203`:
+
+```sh
+docker inspect loopp-api loopp-caddy loopp-db \
+  --format '{{.Name}} | {{.State.Status}} | {{.HostConfig.RestartPolicy.Name}}'
+docker ps --format '{{.Names}} | {{.Status}} | {{.Ports}}'
+free -h
+```
+
+To restore the legacy application later, run these commands on the VM as the
+`ubuntu` user (who can access Docker):
+
+```sh
+docker update --restart=unless-stopped loopp-db loopp-api loopp-caddy
+docker start loopp-db
+until [ "$(docker inspect -f '{{.State.Health.Status}}' loopp-db)" = healthy ]; do sleep 2; done
+docker start loopp-api
+until [ "$(docker inspect -f '{{.State.Health.Status}}' loopp-api)" = healthy ]; do sleep 2; done
+docker start loopp-caddy
+docker ps --filter label=com.docker.compose.project=loop-ai \
+  --format '{{.Names}} | {{.Status}} | {{.Ports}}'
+```
+
+The existing container metadata points to
+`/home/ubuntu/loop-ai-next/docker-compose.prod.yml` for `loopp-api` and
+`/home/ubuntu/loop-ai/docker-compose.prod.yml` for `loopp-db` and
+`loopp-caddy`. The exact `docker start` commands above reuse those containers
+and their persisted volumes without rebuilding either Compose version. The
+legacy Caddy container owns renewal of the certificate mounted read-only by
+Loopp's proxy; while it is paused, monitor that certificate's expiration
+(currently February 18, 2027) if the pause lasts longer than expected.
+
 ## Operations
 
 The production configuration template is `deploy/.env.example`.

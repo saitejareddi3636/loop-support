@@ -2,31 +2,62 @@
 
 import asyncio
 import json
+import operator
 import os
 import re
 import time
-from uuid import uuid4
 from typing import Annotated
-import operator
-from langchain_core.messages import AIMessage, SystemMessage, ToolMessage, message_chunk_to_message
+from uuid import uuid4
+
+from langchain_core.messages import (
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ToolMessage,
+    message_chunk_to_message,
+)
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.config import get_stream_writer
 from langgraph.graph import END, START, MessagesState, StateGraph
-from app.tools.support import tools_for_chat
-from app.agent.answers import refund_reply, invoice_list_reply
-from app.policy import grounded_answer, validate_evidence, decision
-from app.resilience import classify, retry_delay, RetryLater
-from app.metrics import text_cost, PRICING_SOURCE
-from app.storage import offer_escalation, verified_customer, conversation_context, user_invoice_ids
-from app.data import account_by_customer
 
-SYSTEM_PROMPT = """You are Loopp, a warm, concise support assistant for a fictional demo.
-Greet people naturally. Ask politely for their name and account email when needed, one step at a time. A greeting never requires policy evidence.
-The backend conversation context records the already verified account. Do not ask for the email again when it is present. Omit customer_id in get_account/get_invoice; never invent customer or invoice IDs.
-Use tools as the source of truth. Get account details, then list_invoices when someone asks whether they have eligible refunds without naming an invoice. A general policy does not prove that any personal invoice qualifies. Report actual eligibility from invoice tools, including existing receipts and denial reasons.
-Use get_invoice for a known ID and search_policy for applicable rules or troubleshooting. Pass a complete policy question. For follow-ups, use the conversation context and previous turns rather than sending a vague one-word query.
-An eligibility question is not a request to execute a refund. When the customer asks to proceed, issue_mock_refund stages a known invoice; if several qualify, ask which one. A separate exact confirmation button is always required. Never issue money, invent an invoice or claim a new receipt before backend confirmation.
-Create a human ticket only with clear authorization. Returned error_category denotes an execution failure; a ticket category is an ordinary business field. Explain real limitations in everyday language, with short answers."""
+from app.agent.answers import compose_turn_answer, unsupported_facts
+from app.data import account_by_customer
+from app.identifiers import (
+    partial_invoice_reference,
+    selected_invoice_ids,
+    supplied_email,
+)
+from app.metrics import PRICING_SOURCE, text_cost
+from app.policy import decision, grounded_answer, validate_evidence
+from app.resilience import RetryLater, classify, retry_delay
+from app.storage import conversation_context, offer_escalation, user_invoice_ids, verified_customer
+from app.tools.support import tools_for_chat
+
+SYSTEM_PROMPT = """You are Loopp, a warm, concise general customer support assistant for a fictional demo—not a refund-only bot.
+Greet people naturally. Ask for name and account email when needed, one step at a time. A greeting never requires policy evidence.
+The backend conversation context already has the verified account, invoice references, refund_receipts, and open_tickets. Do not ask for the email again when an account is present. Never invent customer, invoice, receipt, or ticket IDs.
+When account tier, subscription status, billing cycle, or contract dates are already present in that context, you may answer those fields directly. Call get_account when the context account is missing or the customer asks you to re-check the live record.
+Questions about a locked, suspended, restricted, or held account should lead with the context (or get_account) status, tier, and restriction labels only. Do not infer that an overdue, disputed, unpaid, or other invoice status caused the restriction unless a retrieved policy or tool result explicitly says so. Do not pivot to refunds.
+If identity was just verified, continue the customer's earlier unresolved concern from history immediately. Do not reset with a generic “how can I help” when that concern is already known.
+When the customer asks about a completed mock refund or receipt, prefer the persisted refund_receipts in context over restaging or guessing.
+Demo tickets record a request only; never promise that a human will follow up or that a live team is reviewing the ticket.
+
+Choose tools by the customer's actual intent (capabilities are separate):
+- verify_customer — identity only.
+- get_account — account/tier/subscription/contract status, including suspension and billing holds.
+- get_invoice — a named invoice's amount, date, status, or description.
+- list_invoices — recent charges or invoice inventory for review. Report amounts, dates, and status. Do not turn an ordinary billing review into a refund offer.
+- search_policy — plan rules, troubleshooting, contracts, cancellation, login, disputes. Pass a complete question.
+- issue_mock_refund — only when the customer clearly asks to refund, prepare, stage, or check personal refund eligibility.
+- create_escalation_ticket — only with clear authorization after explaining the issue. “What should I do next” or “without refunding” is not ticket authorization; explain options and ask first.
+
+Never volunteer refund eligibility, refund options, confirmation cards, or “would you like a refund?” after verification or ordinary account/billing questions. A general policy never proves personal eligibility.
+One turn can contain several asks. Complete each authorized action and answer the remaining questions in the same reply. If an open ticket already exists in context, reuse its ticket_id; do not offer to open another unless the customer asks. Questions about contact timing or ticket status should use that open ticket; do not answer them with unrelated policy excerpts.
+When the customer does ask to proceed with a refund, issue_mock_refund stages a known invoice; if several qualify, ask which one. The separate confirmation button is always required. Spoken yes cannot issue a receipt.
+Scope: Loopp accounts, invoices, mock refunds, policies, and tickets only. Decline unrelated requests briefly without calling search_policy, and without repeating the same sentence.
+Answer from tool results, history, and backend context in natural concise language. Preserve important IDs and amounts. Never state policy numbers, invoice amounts, or receipts from memory."""
+
+FACT_CHECK_FALLBACK = "I can't verify that from your account records or Loopp's support policies yet. Tell me which invoice or policy you'd like me to check, and I'll look it up."
 
 
 class AgentState(MessagesState):
@@ -39,6 +70,13 @@ def text_content(message):
     return c if isinstance(c, str) else "".join(p.get("text", "") for p in c if isinstance(p, dict))
 
 
+def support_text(state: AgentState, messages):
+    return "\n".join(
+        [json.dumps(state.get("context", {}), default=str)]
+        + [text_content(m) for m in messages if not isinstance(m, SystemMessage)]
+    )
+
+
 def prepare_model_input(state: AgentState, writer):
     results = state.get("results", [])
     policies = [
@@ -49,7 +87,7 @@ def prepare_model_input(state: AgentState, writer):
         re.search(
             r"polic(?:y|ies)|refund|contract|cancel|login|activation|trial|limit|upgrade|downgrade|suspend|reactivat|correction|dispute|payment fail",
             latest,
-            re.I,
+            re.IGNORECASE,
         )
     )
     messages = [
@@ -60,6 +98,17 @@ def prepare_model_input(state: AgentState, writer):
         ),
         *state["messages"],
     ]
+    if any(r["name"] == "verify_customer" and r["result"].get("verified") for r in results):
+        messages.append(
+            HumanMessage(
+                content=(
+                    "Backend note, not from the customer: identity was just verified. "
+                    "Continue their earlier unresolved request from the conversation history. "
+                    "Do not ask a generic how-can-I-help unless no prior concern exists, "
+                    "and do not offer refunds unless they asked for one."
+                )
+            )
+        )
     writer(
         {
             "type": "prompt_trace",
@@ -77,17 +126,23 @@ def prepare_model_input(state: AgentState, writer):
     return results, policies, latest, policy_intent, messages
 
 
-def required_invoice_call(state: AgentState, results, latest, delivered, writer):
-    # A personal refund answer requires fresh owned invoice evidence.
-    # If the model omits that read, enforce the dependency before replying.
-    personal_refund = bool(
-        re.search(r"refund", latest, re.I)
-        and re.search(
-            r"\b(i|my|me|any|eligible|go ahead|give|is+ue|prepare|stage|process|proceed)\b",
-            latest,
-            re.I,
+def required_invoice_call(state: AgentState, results, latest, delivered, writer, draft=""):
+    # A refund action, or a reply about the customer's own refund eligibility, requires fresh
+    # owned invoice evidence. A scope decline or a policy answer does not.
+    claims_eligibility = bool(
+        re.search(
+            r"eligib|qualif|refundable|can (?:get|receive|have) (?:a |the )?(?:full |mock )?refund",
+            draft,
+            re.IGNORECASE,
         )
-        and not re.search(r"\b(policy|rules|terms|window)\b", latest, re.I)
+    )
+    personal_refund = bool(
+        re.search(r"refund", latest, re.IGNORECASE)
+        and (
+            claims_eligibility
+            or re.search(r"\b(go ahead|give|is+ue|prepare|stage|process|proceed)\b", latest, re.IGNORECASE)
+        )
+        and not any(r["name"] == "search_policy" for r in results)
     )
     invoice_checked = any(
         r["name"] == "issue_mock_refund"
@@ -115,7 +170,7 @@ def required_invoice_call(state: AgentState, results, latest, delivered, writer)
         re.search(
             r"go ahead|\bis+ue\b.{0,30}refund|give.{0,30}refund|(?:prepare|stage).{0,60}\brefund\b|refund\s+(?:it|that|this|INV-)",
             latest,
-            re.I,
+            re.IGNORECASE,
         )
     )
     has_stage = any(r["name"] == "issue_mock_refund" for r in results)
@@ -175,8 +230,61 @@ def build_graph(api_key, chat_id, trace_id):
     async def call_model(state: AgentState):
         writer = get_stream_writer()
         results, policies, latest, policy_intent, messages = prepare_model_input(state, writer)
+        references = state.get("context", {}).get("references", {})
+        if not results:
+            selected = selected_invoice_ids(latest, references)
+            if references.get("awaiting_refund_invoice_choice") and partial_invoice_reference(
+                latest
+            ):
+                return {
+                    "messages": [
+                        AIMessage(
+                            content="",
+                            tool_calls=[
+                                {
+                                    "name": "list_invoices",
+                                    "args": {},
+                                    "id": "clarify_" + uuid4().hex,
+                                }
+                            ],
+                        )
+                    ]
+                }
+            if references.get("awaiting_refund_invoice_choice") and len(selected) == 1:
+                return {
+                    "messages": [
+                        AIMessage(
+                            content="",
+                            tool_calls=[
+                                {
+                                    "name": "issue_mock_refund",
+                                    "args": {"invoice_id": next(iter(selected))},
+                                    "id": "selected_" + uuid4().hex,
+                                }
+                            ],
+                        )
+                    ]
+                }
+            if not state.get("context", {}).get("account") and supplied_email(latest):
+                return {
+                    "messages": [
+                        AIMessage(
+                            content="",
+                            tool_calls=[
+                                {
+                                    "name": "verify_customer",
+                                    "args": {"email": supplied_email(latest)},
+                                    "id": "identity_" + uuid4().hex,
+                                }
+                            ],
+                        )
+                    ]
+                }
         deadline = time.monotonic() + float(os.getenv("MODEL_REQUEST_BUDGET_SECONDS", "45"))
-        for attempt in range(3):
+        attempt = 0
+        revised = False
+        support = support_text(state, messages)
+        while True:
             started = time.perf_counter()
             aggregate = None
             delivered = False
@@ -217,10 +325,14 @@ def build_graph(api_key, chat_id, trace_id):
                     if delivered:
                         writer({"type": "answer_reset"})
                 else:
-                    required = required_invoice_call(state, results, latest, delivered, writer)
+                    answer = text_content(reply)
+                    required = required_invoice_call(
+                        state, results, latest, delivered, writer, answer
+                    )
                     if required is not None:
                         return required
-                    answer = text_content(reply)
+                    evidence = None
+                    policy_text = ""
                     if policies:
                         evidence = policies[-1]
                         customer = await asyncio.to_thread(verified_customer, chat_id)
@@ -259,57 +371,37 @@ def build_graph(api_key, chat_id, trace_id):
                                 }
                             )
                         refunds = [r["result"] for r in results if r["name"] == "issue_mock_refund"]
-                        answer = await asyncio.to_thread(
+                        policy_text = await asyncio.to_thread(
                             grounded_answer, evidence, latest, 1 if refunds else 3
                         )
-                        if refunds:
-                            basis = answer if evidence["decision"] == "GROUNDED" else ""
-                            answer = refund_reply(refunds[-1], basis)
-                        # Only deterministic backend action facts are appended to policy excerpts.
-                        for r in results:
-                            value = r["result"]
-                            if r["name"] == "create_escalation_ticket":
-                                answer += "\n\n" + (
-                                    value.get("error")
-                                    or f"Ticket {value.get('ticket_id')} is {value.get('status')}."
-                                )
-                    elif policy_intent or not results:
-                        answer = (
-                            "I'd be happy to help. What would you like me to check about your account, an invoice, or a support policy?"
-                            if state.get("context", {}).get("account")
-                            else "I'd be happy to look into that. What's the email on your fictional demo account?"
+                    elif not results:
+                        issues = unsupported_facts(answer, support)
+                        if issues and not revised:
+                            revised = True
+                            writer({"type": "answer_revision", "unsupported": issues})
+                            messages = [
+                                *messages,
+                                AIMessage(content=answer),
+                                HumanMessage(
+                                    content="Backend validation, not from the customer: your draft stated "
+                                    + ", ".join(issues)
+                                    + ", which is not in the conversation, backend context or any tool result. Call the appropriate tool to verify it, or reply without it."
+                                ),
+                            ]
+                            continue
+                        if issues or not answer.strip():
+                            answer = FACT_CHECK_FALLBACK
+                    if results or evidence is not None:
+                        answer = compose_turn_answer(
+                            answer,
+                            results,
+                            evidence=evidence,
+                            support=support,
+                            latest=latest,
+                            policy_text=policy_text,
                         )
-                    prior_receipts = [
-                        r["result"]
-                        for r in results
-                        if r["name"] == "issue_mock_refund"
-                        and r["result"].get("status") == "already_refunded"
-                    ]
-                    if prior_receipts:
-                        answer = refund_reply(prior_receipts[-1])
-                    listings = [r["result"] for r in results if r["name"] == "list_invoices"]
-                    checks = [r["result"] for r in results if r["name"] == "issue_mock_refund"]
-                    if listings and not checks:
-                        answer = invoice_list_reply(listings[-1])
-                    if checks and not policies:
-                        answer = refund_reply(checks[-1])
-                    tickets = [
-                        r["result"]
-                        for r in results
-                        if r["name"] == "create_escalation_ticket" and r["result"].get("ticket_id")
-                    ]
-                    if tickets:
-                        answer = f"Ticket {tickets[-1]['ticket_id']} is {tickets[-1]['status']}. Your request has been saved for human review."
-                    failures = [r for r in results if r["result"].get("error_category")]
-                    if failures:
-                        deferred = next(
-                            (r["result"] for r in failures if r["result"].get("retry_later")), None
-                        )
-                        answer = (
-                            deferred["error"]
-                            if deferred
-                            else "A support tool is unavailable, so I cannot verify that answer or complete the request. Would you like a human support ticket?"
-                        )
+                    if not answer.strip():
+                        answer = FACT_CHECK_FALLBACK
                     writer({"type": "final_answer", "answer": answer})
                 return {"messages": [reply]}
             except Exception as error:
@@ -329,6 +421,7 @@ def build_graph(api_key, chat_id, trace_id):
                     }
                 )
                 await asyncio.sleep(delay)
+                attempt += 1
 
     async def call_tools(state: AgentState):
         nonlocal simulated

@@ -390,3 +390,10 @@ button:focus-visible, textarea:focus-visible, a:focus-visible { outline: 2px sol
   .voice-controls { margin-top:12px; min-height:66px; }
   .stage-footnote { display:none; }
 }
+
+/* Conversation actions reuse the current card/button palette. */
+.invoice-choices ol { list-style:none; padding:0; margin:0; display:grid; gap:12px; }
+.invoice-choice { display:grid; width:100%; gap:6px; text-align:left; }
+.invoice-choice small { overflow-wrap:anywhere; font:inherit; font-size:11px; }
+.email-correction label { display:grid; gap:8px; margin-bottom:12px; }
+.email-correction input { width:100%; min-width:0; padding:12px; border:1px solid currentColor; border-radius:8px; background:transparent; color:inherit; font:inherit; }
