@@ -1,6 +1,7 @@
 """Mocked relevance decisions: no network or database required."""
 
 import unittest
+import os
 from datetime import date
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
@@ -27,6 +28,11 @@ def row(similarity=0.75, version=2):
 
 
 class PolicyRelevanceTests(unittest.TestCase):
+    def setUp(self):
+        self.mode = patch.dict(os.environ, {"RELEVANCE_VERIFIER": "on"})
+        self.mode.start()
+        self.addCleanup(self.mode.stop)
+
     def retrieve(self, rows, verdict):
         database = MagicMock()
         database.return_value.__enter__.return_value.execute.return_value.fetchall.return_value = (
@@ -178,6 +184,58 @@ class PolicyRelevanceTests(unittest.TestCase):
         self.assertEqual(verification["failure_reason"], "injected_instruction")
         self.assertFalse(verification["attempted"])
         client.assert_not_called()
+
+    def test_verifier_defaults_on_and_explicit_on_checks_relevance(self):
+        for mode in (None, "on", "invalid-value"):
+            with self.subTest(mode=mode), patch.dict(os.environ):
+                if mode is None:
+                    os.environ.pop("RELEVANCE_VERIFIER", None)
+                else:
+                    os.environ["RELEVANCE_VERIFIER"] = mode
+                result, verify = self.retrieve([row()], {"verdict": "NO"})
+                self.assertEqual(result["decision"], "ESCALATION_REQUIRED")
+                verify.assert_called_once()
+
+    def test_verifier_off_skips_model_and_marks_retrieval_only(self):
+        with patch.dict(os.environ, {"RELEVANCE_VERIFIER": "off"}):
+            result, verify = self.retrieve([row()], {"verdict": "NO"})
+        self.assertEqual(result["decision"], "GROUNDED")
+        self.assertEqual(result["threshold"], 0.68)
+        self.assertEqual(result["sources"][0]["excerpt"], row()["content"])
+        self.assertEqual(
+            result["relevance_verification"], {"verdict": "DISABLED", "attempted": False}
+        )
+        self.assertIn("disabled", result["verification_reason"])
+        verify.assert_not_called()
+
+    def test_verifier_off_still_rejects_low_similarity_and_conflicts(self):
+        with patch.dict(os.environ, {"RELEVANCE_VERIFIER": "off"}):
+            for rows in ([row(0.67)], [row(version=1), row(version=2)]):
+                result, verify = self.retrieve(rows, {"verdict": "YES"})
+                self.assertEqual(result["decision"], "ESCALATION_REQUIRED")
+                verify.assert_not_called()
+
+    def test_verifier_off_still_validates_citations_and_on_rejects_disabled_evidence(self):
+        with patch.dict(os.environ, {"RELEVANCE_VERIFIER": "off"}):
+            result, _ = self.retrieve([row()], {})
+            database = MagicMock()
+            record = {
+                "active": True,
+                "version": 2,
+                "content": row()["content"],
+                "tiers": ["Business"],
+                "effective_date": row()["effective_date"],
+                "expiration_date": None,
+            }
+            fetch = database.return_value.__enter__.return_value.execute.return_value.fetchone
+            with patch("app.policy.db", database):
+                fetch.side_effect = [record, {"n": 1}]
+                self.assertTrue(validate_evidence(result))
+                fetch.side_effect = [{**record, "content": "Tampered"}, {"n": 1}]
+                self.assertFalse(validate_evidence(result))
+        with patch("app.policy.db") as database:
+            self.assertFalse(validate_evidence(result))
+            database.assert_not_called()
 
 
 class VerificationTraceTests(unittest.IsolatedAsyncioTestCase):

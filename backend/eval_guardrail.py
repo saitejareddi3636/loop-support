@@ -135,7 +135,7 @@ def main(new_only=False):
     ]
     for label, queries, expected in new_sets if new_only else old_sets + new_sets:
         before = after = 0
-        verdict_counts = {"YES": 0, "NO": 0, "UNAVAILABLE": 0, "NOT_RUN": 0}
+        verdict_counts = {"YES": 0, "NO": 0, "UNAVAILABLE": 0, "NOT_RUN": 0, "DISABLED": 0}
         similarities = []
         print(f"\n{label}: expected {'GROUNDED' if expected else 'not GROUNDED'}", flush=True)
         for number, (tier, query) in enumerate(queries, 1):

@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import re
 from datetime import date
 from pathlib import Path
@@ -281,6 +282,17 @@ def search(query, tier=None):
             tier,
             top=top,
         )
+    if os.getenv("RELEVANCE_VERIFIER", "on").strip().lower() == "off":
+        result = decision(
+            "GROUNDED",
+            "Retrieved current, applicable passages above the 0.68 threshold. The additional relevance verifier is disabled; this is retrieval-only evidence and does not establish refund eligibility.",
+            tier,
+            sources,
+            top,
+        )
+        result["retrieval_decision"] = "GROUNDED"
+        result["relevance_verification"] = {"verdict": "DISABLED", "attempted": False}
+        return result
     verification = assess_relevance(query, tier, sources)
     if verification.get("verdict") != "YES":
         reason = (
@@ -305,7 +317,11 @@ def search(query, tier=None):
 def validate_evidence(result):
     if result["decision"] != "GROUNDED":
         return False
-    if result.get("relevance_verification", {"verdict": "YES"}).get("verdict") != "YES":
+    verdict = result.get("relevance_verification", {"verdict": "YES"}).get("verdict")
+    disabled = (
+        verdict == "DISABLED" and os.getenv("RELEVANCE_VERIFIER", "on").strip().lower() == "off"
+    )
+    if verdict != "YES" and not disabled:
         return False
     for s in result["sources"]:
         if s["effective_date"] > date.today().isoformat() or (
