@@ -159,6 +159,23 @@ LOOPP_API_TARGET=http://127.0.0.1:8001 npm run dev -- --host 127.0.0.1 --port 51
 
 Open [http://127.0.0.1:5174](http://127.0.0.1:5174). Production operations, TLS, backups, and key-rotation notes: [deploy/README.md](deploy/README.md). Keep secrets, certificates, and backups out of Git.
 
+## CI/CD
+
+GitHub Actions on this repository:
+
+| Workflow | Trigger | What it does |
+| --- | --- | --- |
+| `CI` | Pull requests and pushes | Backend regression suite (ephemeral Postgres) and frontend production build |
+| `Deploy production` | Push to `main` (and manual dispatch) | Builds the frontend, deploys Cloudflare Pages (`loopp-support`), safely rebuilds the Oracle API image via SSH (`deploy/remote_release.py`), then runs `deploy/smoke_test.sh` against https://loopp-support.pages.dev |
+
+Required GitHub Actions secrets (repository or `production` environment):
+
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN` (Pages edit)
+- `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_PRIVATE_KEY` (optional `ORACLE_SSH_PORT`)
+
+The Oracle step backs up PostgreSQL, rebuilds **only** the API container, asserts existing refund receipts and unrelated containers are unchanged, and rolls back the API image if health checks fail. It never runs `docker compose down -v`. Pages production bindings (`PUBLIC_ORIGIN`, `API_ORIGIN`, `LOOPP_GATEWAY_SECRET`) stay in Cloudflare; they are not stored in Git.
+
 ## Testing and evaluation
 
 ### Backend regression (automated)

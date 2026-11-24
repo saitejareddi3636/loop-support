@@ -81,10 +81,25 @@ To recreate this host setup, supply the HTTPS certificate directory, generate
 the PostgreSQL CA/server pair under `runtime/postgres` (SAN `DNS:db`, key owned
 by container UID 999 with mode 0600), and keep `deploy/init-db.sh` readable (0644).
 
-Build the frontend with `cd frontend && npm ci && npm run build`. Authenticate
-Cloudflare, set its three production bindings, then use
+### CI/CD (GitHub Actions)
+
+Pushes to `main` run `.github/workflows/deploy.yml`:
+
+1. Frontend `npm ci && npm run build`
+2. Cloudflare Pages direct upload via Wrangler (`loopp-support`, branch `main`)
+3. Oracle host release through SSH + `deploy/remote_release.py` (API-only rebuild with DB backup and rollback)
+4. `deploy/smoke_test.sh https://loopp-support.pages.dev`
+
+Configure repository or `production` environment secrets: `CLOUDFLARE_ACCOUNT_ID`,
+`CLOUDFLARE_API_TOKEN`, `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_PRIVATE_KEY`
+(optional `ORACLE_SSH_PORT`). Without the Oracle SSH secrets, Pages still deploys
+and the Oracle step is skipped.
+
+Manual fallback remains available: build the frontend with
+`cd frontend && npm ci && npm run build`, then
 `npx wrangler pages deploy dist --project-name loopp-support --branch main`.
-Pages uses direct uploads; GitHub pushes do not automatically publish it.
+Keep Pages production bindings (`PUBLIC_ORIGIN`, `API_ORIGIN`, `LOOPP_GATEWAY_SECRET`)
+in Cloudflare only.
 
 `/etc/cron.d/loopp-support` runs `deploy/maintain.sh` every six hours, writes
 protected PostgreSQL dumps under `backups/`, and retains seven days. This is
