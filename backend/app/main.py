@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import asynccontextmanager
 from threading import Lock
 
+import anyio
 from fastapi import FastAPI, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
 from google import genai
 from google.genai import types
@@ -31,9 +32,12 @@ logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
-async def lifespan(_app):
+async def lifespan(app):
     validate_runtime_config()
-    yield
+    # Request cancel scopes must not kill in-flight chat turns during mode switches.
+    async with anyio.create_task_group() as turn_group:
+        app.state.turn_group = turn_group
+        yield
 
 
 app = FastAPI(title="Loopp support prototype", lifespan=lifespan)
@@ -83,7 +87,6 @@ async def security_headers(request, call_next):
 
 
 app.include_router(chat_router)
-voice_tasks: set[asyncio.Task] = set()
 
 
 @app.post("/api/session")
@@ -151,36 +154,40 @@ def health() -> dict[str, str | bool]:
 async def execute_voice_request(
     chat_id: str, call_id: str, query: str, api_key: str, emit: Callable[[dict], Awaitable[None]]
 ) -> str:
-    created, previous_answer = await asyncio.to_thread(reserve_voice_request, chat_id, call_id)
-    if previous_answer:
-        return previous_answer
-    if not created:
-        return "That request is already being processed. Please wait."
-    if not query:
-        answer = "I could not understand that request. Please repeat it."
-        finish_voice_request(chat_id, call_id, answer)
-        return answer
-    answer = None
-    failure_message = None
-    await emit({"type": "turn_started", "call_id": call_id})
-    try:
-        async for update in run_turn(chat_id, query, api_key, "voice:" + call_id):
-            if update["type"] == "complete":
-                answer = update["answer"]
-            else:
-                if update["type"] == "error":
-                    failure_message = update["message"]
-                await emit(
-                    {**update, "type": "agent_error"} if update["type"] == "error" else update
-                )
-        finish_voice_request(
-            chat_id, call_id, answer or failure_message, failed=bool(failure_message)
-        )
-        return answer or failure_message or "I could not complete that request. Please try again."
-    except Exception:
-        logger.exception("Voice agent request failed")
-        finish_voice_request(chat_id, call_id, None)
-        return "I could not complete that request. Please try again."
+    # Survive WebSocket teardown when the UI switches chat↔voice mid-turn.
+    with anyio.CancelScope(shield=True):
+        created, previous_answer = await asyncio.to_thread(reserve_voice_request, chat_id, call_id)
+        if previous_answer:
+            return previous_answer
+        if not created:
+            return "That request is already being processed. Please wait."
+        if not query:
+            answer = "I could not understand that request. Please repeat it."
+            finish_voice_request(chat_id, call_id, answer)
+            return answer
+        answer = None
+        failure_message = None
+        await emit({"type": "turn_started", "call_id": call_id})
+        try:
+            async for update in run_turn(chat_id, query, api_key, "voice:" + call_id):
+                if update["type"] == "complete":
+                    answer = update["answer"]
+                else:
+                    if update["type"] == "error":
+                        failure_message = update["message"]
+                    await emit(
+                        {**update, "type": "agent_error"} if update["type"] == "error" else update
+                    )
+            finish_voice_request(
+                chat_id, call_id, answer or failure_message, failed=bool(failure_message)
+            )
+            return (
+                answer or failure_message or "I could not complete that request. Please try again."
+            )
+        except Exception:
+            logger.exception("Voice agent request failed")
+            finish_voice_request(chat_id, call_id, None)
+            return "I could not complete that request. Please try again."
 
 
 @app.websocket("/api/voice")
@@ -252,6 +259,8 @@ async def voice_connected(websocket: WebSocket, owner: str) -> None:
         ],
         "system_instruction": "You are Loopp's live voice interface for general customer support. For every complete user speech turn, call support_request once with the user's exact spoken request, including prior concern details when they continue a topic. Never answer from your own knowledge. Speak the returned answer faithfully and concisely, including policy citation IDs when present. Do not invent refund offers, eligibility lists, or confirmation requests that are not in the returned answer. Never claim a refund was issued without a receipt. Speak ticket wording exactly; do not add that a live team is reviewing or will follow up. When the answer presents numbered invoice options for a refund choice, speak the option numbers and amounts; full invoice IDs are on screen, so do not read long date-based IDs aloud. When the answer requires confirmation, say the conversation panel has a confirmation card and tell the customer to click 'Confirm invoice and amount'; spoken yes is not confirmation. If email lookup fails, ask them to spell the full address slowly, including dots and domain, or type it in the email box. Audio interruptions are allowed.",
     }
+    # Per-socket agent turns; awaited on disconnect so chat↔voice restore sees completed rows.
+    socket_voice_tasks: set[asyncio.Task] = set()
 
     try:
         async with client.aio.live.connect(model=model, config=config) as session:
@@ -347,8 +356,8 @@ async def voice_connected(websocket: WebSocket, owner: str) -> None:
                                 task = asyncio.create_task(
                                     execute_voice_request(chat_id, call.id, query, api_key, emit)
                                 )
-                                voice_tasks.add(task)
-                                task.add_done_callback(voice_tasks.discard)
+                                socket_voice_tasks.add(task)
+                                task.add_done_callback(socket_voice_tasks.discard)
                                 answer = await asyncio.shield(task)
                                 try:
                                     await websocket.send_json(
@@ -460,6 +469,11 @@ async def voice_connected(websocket: WebSocket, owner: str) -> None:
         except Exception:
             pass
     finally:
+        if socket_voice_tasks:
+            await asyncio.gather(
+                *[asyncio.shield(task) for task in list(socket_voice_tasks)],
+                return_exceptions=True,
+            )
         try:
             await websocket.close()
         except Exception:

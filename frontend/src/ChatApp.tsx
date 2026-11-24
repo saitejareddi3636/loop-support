@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { ActivityPanel, restoreTools, finishTool, Markdown, RefundCard, startTool, type PendingRefund, type Receipt, type ToolRun, type TraceEvent } from './Activity';
 
 import { InvoiceChoices, EmailCorrection, invoiceOptions, receiptFromResult, type InvoiceOption } from './ConversationActions';
+import { hydrateConversation, rememberChatId, rememberedChatId } from './conversationSync';
 import { streamChat } from './streamChat';
 
 type Chat = { id: string; title: string };
@@ -33,44 +34,61 @@ export default function ChatApp() {
   const bottomRef = useRef<HTMLDivElement>(null);
   const mobileActivityRef = useRef<HTMLDetailsElement>(null);
   const nextId = useRef(-1);
+  const hydrateAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
+    hydrateAbortRef.current = controller;
     void (async () => {
       try {
         const list = await request<Chat[]>('/api/chats');
+        if (controller.signal.aborted) return;
         setChats(list);
-        const preferred = localStorage.getItem('loopp-chat-id');
-        if (preferred && list.some(chat => chat.id === preferred)) await openChat(preferred);
-        else if (list[0]) await openChat(list[0].id);
-      } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not load chats.'); }
-      finally { setLoading(false); }
+        const preferred = rememberedChatId();
+        if (preferred && list.some(chat => chat.id === preferred)) await openChat(preferred, controller.signal);
+        else if (list[0]) await openChat(list[0].id, controller.signal);
+      } catch (cause) {
+        if (controller.signal.aborted || (cause instanceof DOMException && cause.name === 'AbortError')) return;
+        setError(cause instanceof Error ? cause.message : 'Could not load chats.');
+      }
+      finally { if (!controller.signal.aborted) setLoading(false); }
     })();
+    return () => {
+      controller.abort();
+      hydrateAbortRef.current = null;
+    };
   }, []);
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, tools]);
   useEffect(() => { if (tools.length && mobileActivityRef.current) mobileActivityRef.current.open = true; }, [tools.length]);
 
-  async function openChat(id: string) {
-    if (busy) return;
+  function applyHydratedChat(chat: { id: string; messages: Message[]; refund_receipts: Receipt[]; traces: { events: TraceEvent[] }[]; pending: PendingRefund | null }) {
+    setChatId(chat.id);
+    setMessages(chat.messages);
+    setListedInvoices(chat.traces.map(trace => invoiceOptions(restoreTools(trace.events))).find(options => options.length) || []);
+    const trace = chat.traces.find(item => item.events.some(event => event.type.startsWith('tool_'))) || chat.traces[0];
+    setNeedsEmail(!!trace?.events.some(event => event.type === 'input_required' && event.field === 'email'));
+    if (trace) { setEvents(trace.events); setTools(restoreTools(trace.events)); }
+    else { setEvents([]); setTools([]); }
+    setRefundReceipts(chat.refund_receipts);
+    setReceipt(chat.refund_receipts.at(-1) || null);
+    setPendingRefund(chat.pending);
+    rememberChatId(chat.id);
+  }
+
+  async function openChat(id: string, signal?: AbortSignal) {
+    if (busy && !signal) return;
     setBusy(true);
     try {
-      const chat = await request<Chat & { messages: Message[]; refund_receipts?: Receipt[] }>(`/api/chats/${id}`);
-      setChatId(chat.id);
-      setMessages(chat.messages);
-      setTools([]);
-      setEvents([]);
-      const traces = await request<{ events: TraceEvent[] }[]>(`/api/chats/${id}/traces`);
-      setListedInvoices(traces.map(trace => invoiceOptions(restoreTools(trace.events))).find(options => options.length) || []);
-      setNeedsEmail(!!traces[0]?.events.some(event => event.type === 'input_required' && event.field === 'email'));
-      if (traces[0]) { setEvents(traces[0].events); setTools(restoreTools(traces[0].events)); }
-      setRefundReceipts(chat.refund_receipts || []);
-      setReceipt(chat.refund_receipts?.at(-1) || null);
-      try { setPendingRefund(await request<PendingRefund | null>(`/api/chats/${id}/refund-pending`)); }
-      catch { setPendingRefund(null); }
+      const chat = await hydrateConversation(id, signal, { onUpdate: applyHydratedChat });
+      if (!chat || signal?.aborted) return;
+      applyHydratedChat(chat);
       setError('');
-      localStorage.setItem('loopp-chat-id', chat.id);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not open this conversation.'); }
-    finally { setBusy(false); }
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') return;
+      setError(cause instanceof Error ? cause.message : 'Could not open this conversation.');
+    }
+    finally { if (!signal?.aborted) setBusy(false); }
   }
 
   async function newChat() {
@@ -89,7 +107,7 @@ export default function ChatApp() {
       setReceipt(null);
       setRefundReceipts([]);
       setError('');
-      localStorage.setItem('loopp-chat-id', chat.id);
+      rememberChatId(chat.id);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not start a chat.'); }
     finally { setBusy(false); }
   }
@@ -145,7 +163,7 @@ export default function ChatApp() {
         id = chat.id;
         setChatId(id);
         setChats(current => [chat, ...current]);
-        localStorage.setItem('loopp-chat-id', id);
+        rememberChatId(id);
       }
       setInput('');
       setMessages(current => [...current, { id: nextId.current--, role: 'user', content: text }, { id: nextId.current--, role: 'assistant', content: '' }]);
