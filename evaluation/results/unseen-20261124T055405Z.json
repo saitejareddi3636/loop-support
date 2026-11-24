@@ -1,0 +1,303 @@
+{
+  "generated_at": "20261124T055405Z",
+  "database": "postgresql://loopp:***@127.0.0.1:55499/loopp_eval",
+  "suite": "unseen",
+  "model": "gemini-3.5-flash-lite",
+  "summary": {
+    "total": 8,
+    "passed": 7,
+    "failed": 1,
+    "pass_rate": 0.875,
+    "by_category": {
+      "account_inquiry": {
+        "pass": 0,
+        "fail": 1
+      },
+      "rag": {
+        "pass": 1,
+        "fail": 0
+      },
+      "billing_discrepancy": {
+        "pass": 1,
+        "fail": 0
+      },
+      "memory": {
+        "pass": 1,
+        "fail": 0
+      },
+      "natural": {
+        "pass": 2,
+        "fail": 0
+      },
+      "multi_intent": {
+        "pass": 1,
+        "fail": 0
+      },
+      "out_of_scope": {
+        "pass": 1,
+        "fail": 0
+      }
+    },
+    "latency_ms_avg": 3557,
+    "estimated_cost_usd_sum": 0.015606,
+    "failed_ids": [
+      "unseen-avery-why-suspended-no-refund"
+    ]
+  },
+  "results": [
+    {
+      "id": "unseen-avery-why-suspended-no-refund",
+      "category": "account_inquiry",
+      "email": "avery.reed@example.test",
+      "pass": false,
+      "reasons": [
+        "missing must_include_any=['suspend', 'Free']"
+      ],
+      "answer": "I've noted that you don't want a refund! Would you like me to create an escalation ticket with our support team so a human agent can review the billing hold on your account and help get things unlocked?",
+      "tools": [
+        "search_policy",
+        "create_escalation_ticket",
+        "create_escalation_ticket"
+      ],
+      "latency_ms": 6112,
+      "input_tokens": 7661,
+      "output_tokens": 235,
+      "estimated_cost_usd": 0.002886,
+      "turns": [
+        {
+          "user": "I logged in and everything looks locked. What happened to my account?",
+          "answer": "Hello Avery! I see your account currently has a suspension status along with a billing hold restriction. \n\nWhile our automated system shows this restriction is in place, read-only tools aren't able to lift account holds or reactivate subscriptions directly. Would you like me to create an escalation ticket so our team can review your account and help get this sorted out?",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 3092
+        },
+        {
+          "user": "Okay \u2014 so what should I do next without refunding anything?",
+          "answer": "I've noted that you don't want a refund! Would you like me to create an escalation ticket with our support team so a human agent can review the billing hold on your account and help get things unlocked?",
+          "tools": [
+            "create_escalation_ticket",
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 3020
+        }
+      ]
+    },
+    {
+      "id": "unseen-casey-trial-then-login",
+      "category": "rag",
+      "email": "casey.rivera@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "For sign-in trouble on your laptop, here are a few things to check:\n\n1. **Verify your details:** Make sure you're using the correct account email spelling and the official Loopp sign-in page. Check if you see any specific error messages.\n2. **Try a private window:** Open a private or incognito browser window to isolate stale cookies. If that works, clearing your browser's stored site data for Loopp usually fixes it.\n3. **Check for emails:** If you're waiting on a sign-in link or verification email, check your spam or junk folder, and request just one new link to avoid getting rate-limited. \n\nLet me know if you run into a specific error message!",
+      "tools": [
+        "search_policy"
+      ],
+      "latency_ms": 3666,
+      "input_tokens": 4875,
+      "output_tokens": 222,
+      "estimated_cost_usd": 0.002017,
+      "turns": [
+        {
+          "user": "Remind me whether I'm still on a trial.",
+          "answer": "Hi Casey! Yes, you are currently on a trial for your Pro monthly plan. Let me know if you need help with anything else!",
+          "tools": [],
+          "latency_ms": 778
+        },
+        {
+          "user": "Actually, I can't sign in on my laptop. What should I check?",
+          "answer": "For sign-in trouble on your laptop, here are a few things to check:\n\n1. **Verify your details:** Make sure you're using the correct account email spelling and the official Loopp sign-in page. Check if you see any specific error messages.\n2. **Try a private window:** Open a private or incognito browser window to isolate stale cookies. If that works, clearing your browser's stored site data for Loopp usually fixes it.\n3. **Check for emails:** If you're waiting on a sign-in link or verification email, check your spam or junk folder, and request just one new link to avoid getting rate-limited. \n\nLet me know if you run into a specific error message!",
+          "tools": [
+            "search_policy"
+          ],
+          "latency_ms": 2888
+        }
+      ]
+    },
+    {
+      "id": "unseen-sam-charge-review-no-pitch",
+      "category": "billing_discrepancy",
+      "email": "sam.patel@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Sam! In November, you had the following charges:\n\n* **Nov 23, 2026**: $69.00 \u2014 *Fictional daily demo monthly invoice* (INV-D20261123-1, Paid)\n* **Nov 21, 2026**: $89.00 \u2014 *Loopp Business additional workspace monthly invoice (Loom demo)* (INV-3005, Paid)\n* **Nov 18, 2026**: $69.00 \u2014 *Loopp Business plan adjustment* (INV-3002, Paid)\n* **Nov 15, 2026**: $149.00 \u2014 *Loopp Business monthly subscription* (INV-3001, Paid)\n* **Nov 1, 2026**: $149.00 \u2014 *Loopp Business monthly subscription* (INV-3003, Disputed)\n\nLet me know if you'd like to look closer at any of these or if you're ready to discuss a refund!",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 1952,
+      "input_tokens": 3532,
+      "output_tokens": 261,
+      "estimated_cost_usd": 0.001712,
+      "turns": [
+        {
+          "user": "Before we talk refunds, just walk me through what I was billed for in November.",
+          "answer": "Hi Sam! In November, you had the following charges:\n\n* **Nov 23, 2026**: $69.00 \u2014 *Fictional daily demo monthly invoice* (INV-D20261123-1, Paid)\n* **Nov 21, 2026**: $89.00 \u2014 *Loopp Business additional workspace monthly invoice (Loom demo)* (INV-3005, Paid)\n* **Nov 18, 2026**: $69.00 \u2014 *Loopp Business plan adjustment* (INV-3002, Paid)\n* **Nov 15, 2026**: $149.00 \u2014 *Loopp Business monthly subscription* (INV-3001, Paid)\n* **Nov 1, 2026**: $149.00 \u2014 *Loopp Business monthly subscription* (INV-3003, Disputed)\n\nLet me know if you'd like to look closer at any of these or if you're ready to discuss a refund!",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 1952
+        }
+      ]
+    },
+    {
+      "id": "unseen-alex-verify-preserves-concern",
+      "category": "memory",
+      "email": null,
+      "pass": true,
+      "reasons": [],
+      "answer": "I can't verify that from your account records or Loopp's support policies yet. Tell me which invoice or policy you'd like me to check, and I'll look it up.",
+      "tools": [
+        "verify_customer",
+        "list_invoices",
+        "list_invoices"
+      ],
+      "latency_ms": 8302,
+      "input_tokens": 8740,
+      "output_tokens": 519,
+      "estimated_cost_usd": 0.003919,
+      "turns": [
+        {
+          "user": "I need help understanding a duplicate Pro charge on my account.",
+          "answer": "Hello! I'd be happy to help you look into that duplicate charge. \n\nCould you please share your account email address so I can locate your account and review your recent invoices?",
+          "tools": [],
+          "latency_ms": 715
+        },
+        {
+          "user": "alex.morgan@example.test",
+          "answer": "Thanks, Alex! I see your recent invoices on your Pro account. Specifically, we have:\n\n- **INV-D20261123-2**: $29.00 on Nov 23, 2026 (Fictional daily demo monthly invoice)\n- **INV-1003**: $19.00 on Nov 15, 2026 (Loopp Pro plan adjustment)\n- **INV-1001**: $29.00 on Nov 1, 2026 (Loopp Pro monthly subscription)\n- **INV-1002**: $29.00 on Oct 1, 2026 (Loopp Pro monthly subscription)\n\nWould you like to take a closer look at the charges from November 1 and November 23, or check on something specific regarding that duplicate charge?",
+          "tools": [
+            "verify_customer",
+            "list_invoices"
+          ],
+          "latency_ms": 1797
+        },
+        {
+          "user": "So what charges am I looking at?",
+          "answer": "I can't verify that from your account records or Loopp's support policies yet. Tell me which invoice or policy you'd like me to check, and I'll look it up.",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 5790
+        }
+      ]
+    },
+    {
+      "id": "unseen-taylor-topic-change",
+      "category": "natural",
+      "email": "taylor.chen@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "You got it! I won't touch your invoices or process any refunds. Let me know if you need help with anything else.",
+      "tools": [
+        "get_invoice"
+      ],
+      "latency_ms": 3112,
+      "input_tokens": 5315,
+      "output_tokens": 109,
+      "estimated_cost_usd": 0.001867,
+      "turns": [
+        {
+          "user": "How much was INV-4001?",
+          "answer": "Invoice INV-4001 was for $2,400.00 (charged on November 15, 2026, for the Loopp Enterprise annual subscription).",
+          "tools": [
+            "get_invoice"
+          ],
+          "latency_ms": 1592
+        },
+        {
+          "user": "Never mind the amount \u2014 what's my contract end date?",
+          "answer": "Your contract is set to end on September 17, 2027.",
+          "tools": [],
+          "latency_ms": 707
+        },
+        {
+          "user": "Thanks. Don't refund anything.",
+          "answer": "You got it! I won't touch your invoices or process any refunds. Let me know if you need help with anything else.",
+          "tools": [],
+          "latency_ms": 813
+        }
+      ]
+    },
+    {
+      "id": "unseen-jordan-secondary-question",
+      "category": "multi_intent",
+      "email": "jordan.lee@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "I've noted that for you\u2014ticket **TKT-1A464E17** is already open regarding the free-versus-starter account status mismatch. \n\nInvoice **INV-2001** is for $12.00, dated November 4, 2026, for the Loopp Starter monthly subscription.",
+      "tools": [
+        "get_invoice",
+        "create_escalation_ticket"
+      ],
+      "latency_ms": 1579,
+      "input_tokens": 2903,
+      "output_tokens": 130,
+      "estimated_cost_usd": 0.001196,
+      "turns": [
+        {
+          "user": "Open a ticket about the free-vs-starter mismatch, and tell me the amount on INV-2001.",
+          "answer": "I've noted that for you\u2014ticket **TKT-1A464E17** is already open regarding the free-versus-starter account status mismatch. \n\nInvoice **INV-2001** is for $12.00, dated November 4, 2026, for the Loopp Starter monthly subscription.",
+          "tools": [
+            "get_invoice",
+            "create_escalation_ticket"
+          ],
+          "latency_ms": 1579
+        }
+      ]
+    },
+    {
+      "id": "unseen-drew-abandon-refund",
+      "category": "natural",
+      "email": "drew.walker@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Your Business account (`acc_1011`) is currently **suspended** with an active billing hold, and your monthly subscription (`sub_1011`) is also suspended. Your contract (`ctr_1011`) remains active and runs through September 17, 2027. \n\nWould you like me to help you look into the billing hold on your account?",
+      "tools": [],
+      "latency_ms": 2032,
+      "input_tokens": 2479,
+      "output_tokens": 117,
+      "estimated_cost_usd": 0.001036,
+      "turns": [
+        {
+          "user": "I was wondering about refunds, but actually forget that.",
+          "answer": "No problem at all, Drew! We can leave refunds aside. \n\nIs there anything else I can help you with today\u2014perhaps regarding your Business account or something else?",
+          "tools": [],
+          "latency_ms": 1094
+        },
+        {
+          "user": "Just tell me my Business account status.",
+          "answer": "Your Business account (`acc_1011`) is currently **suspended** with an active billing hold, and your monthly subscription (`sub_1011`) is also suspended. Your contract (`ctr_1011`) remains active and runs through September 17, 2027. \n\nWould you like me to help you look into the billing hold on your account?",
+          "tools": [],
+          "latency_ms": 938
+        }
+      ]
+    },
+    {
+      "id": "unseen-reese-out-of-scope-then-account",
+      "category": "out_of_scope",
+      "email": "reese.martin@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Yes, your Pro plan subscription status is currently expired (as of November 1, 2026). Let me know if you have any questions about your invoices or anything else on your account!",
+      "tools": [],
+      "latency_ms": 1700,
+      "input_tokens": 2494,
+      "output_tokens": 90,
+      "estimated_cost_usd": 0.000973,
+      "turns": [
+        {
+          "user": "Can you help me cancel my gym membership downtown?",
+          "answer": "I can help with questions about your Loopp account, invoices, and subscriptions, but I'm unable to assist with external memberships like a downtown gym. Let me know if you need help with anything related to your Loopp account!",
+          "tools": [],
+          "latency_ms": 894
+        },
+        {
+          "user": "Fine \u2014 has my Pro plan expired then?",
+          "answer": "Yes, your Pro plan subscription status is currently expired (as of November 1, 2026). Let me know if you have any questions about your invoices or anything else on your account!",
+          "tools": [],
+          "latency_ms": 806
+        }
+      ]
+    }
+  ]
+}

@@ -5,21 +5,22 @@ import json
 import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
+
 import psycopg
-from psycopg import sql
 from app import storage
 from app.db import connect
-from app.policy import document_chunks, seed, search, validate_evidence, grounded_answer
-from app.refunds import stage_refund, confirm_refund, create_ticket
-from app.resilience import classify
-from app.tools.customer import get_invoice, get_account, verify_customer
 from app.main import app, execute_voice_request
+from app.policy import document_chunks, grounded_answer, search, seed, validate_evidence
+from app.refunds import confirm_refund, create_ticket, stage_refund
+from app.resilience import classify
+from app.tools.customer import get_account, get_invoice, verify_customer
 from fastapi.testclient import TestClient
 from migrate import migrate
+from psycopg import sql
 from seed_data import seed as seed_records
 
 
@@ -88,8 +89,8 @@ class HardeningTests(unittest.TestCase):
         )
 
     def test_current_turn_identity_and_owned_invoice_drive_requested_staging(self):
-        from langchain_core.messages import AIMessageChunk, HumanMessage
         from app.agent.graph import build_graph
+        from langchain_core.messages import AIMessageChunk, HumanMessage
 
         class Provider:
             def __init__(self, *args, **kwargs):
@@ -151,7 +152,7 @@ class HardeningTests(unittest.TestCase):
                     ["verify_customer", "get_invoice", "issue_mock_refund"],
                 )
                 self.assertIn(
-                    "Confirm the invoice and amount",
+                    "Confirm invoice and amount",
                     next(e["answer"] for e in events if e["type"] == "final_answer"),
                 )
         with connect() as db:
@@ -163,9 +164,9 @@ class HardeningTests(unittest.TestCase):
             )
 
     def test_daily_demo_refresh_is_insert_only_idempotent_and_excludes_refunds(self):
-        from refresh_demo import refresh
         from app.refunds import eligibility
         from app.tools.support import tools_for_chat
+        from refresh_demo import refresh
 
         class Today(date):
             @classmethod
@@ -340,6 +341,21 @@ class HardeningTests(unittest.TestCase):
             "open",
         )
 
+    def test_followup_consent_allows_yes_plus_another_question(self):
+        storage.add_message(
+            self.chat,
+            "assistant",
+            "Would you like me to create an escalation ticket for our support team to review your request?",
+        )
+        storage.add_message(
+            self.chat, "user", "Yes, and what is my negotiated cancellation penalty?"
+        )
+        ticket = create_ticket(
+            self.chat, "billing", "Enterprise refund and negotiated cancellation review"
+        )
+        self.assertEqual(ticket["status"], "open")
+        self.assertTrue(ticket["ticket_id"].startswith("TKT"))
+
     def test_cookie_session_isolation_and_websocket_rejection(self):
         with TestClient(app) as a, TestClient(app) as b:
             self.assertEqual(a.get("/api/chats").status_code, 401)
@@ -400,6 +416,7 @@ class HardeningTests(unittest.TestCase):
     def test_voice_socket_limits_release_slots_without_gemini(self):
         from contextlib import ExitStack
         from types import SimpleNamespace
+
         from app.main import voice_slots
 
         class FakeLive:
@@ -429,29 +446,29 @@ class HardeningTests(unittest.TestCase):
             patch.dict(os.environ, {"VOICE_MAX_PER_SESSION": "1", "VOICE_MAX_GLOBAL": "3"}),
             patch("app.main.genai.Client", FakeClient),
             patch("app.main.configured_api_key", return_value="fake"),
+            TestClient(app) as client,
         ):
-            with TestClient(app) as client:
-                with ExitStack() as sockets:
-                    first = sockets.enter_context(connect(client, sessions[0]))
-                    self.assertEqual(first.receive_json()["type"], "ready")
-                    duplicate = sockets.enter_context(connect(client, sessions[0]))
+            with ExitStack() as sockets:
+                first = sockets.enter_context(connect(client, sessions[0]))
+                self.assertEqual(first.receive_json()["type"], "ready")
+                duplicate = sockets.enter_context(connect(client, sessions[0]))
+                self.assertEqual(
+                    duplicate.receive_json(),
+                    {
+                        "type": "error",
+                        "message": "Voice is busy. Please try again in a minute.",
+                    },
+                )
+                for token in sessions[1:3]:
                     self.assertEqual(
-                        duplicate.receive_json(),
-                        {
-                            "type": "error",
-                            "message": "Voice is busy. Please try again in a minute.",
-                        },
+                        sockets.enter_context(connect(client, token)).receive_json()["type"],
+                        "ready",
                     )
-                    for token in sessions[1:3]:
-                        self.assertEqual(
-                            sockets.enter_context(connect(client, token)).receive_json()["type"],
-                            "ready",
-                        )
-                    fourth = sockets.enter_context(connect(client, sessions[3]))
-                    self.assertEqual(
-                        fourth.receive_json()["message"],
-                        "Voice is busy. Please try again in a minute.",
-                    )
+                fourth = sockets.enter_context(connect(client, sessions[3]))
+                self.assertEqual(
+                    fourth.receive_json()["message"],
+                    "Voice is busy. Please try again in a minute.",
+                )
         self.assertEqual(voice_slots.total, 0)
 
     def test_interrupted_tool_persists_failure_without_partial_assistant(self):
@@ -540,8 +557,8 @@ class HardeningTests(unittest.TestCase):
         self.assertIn("error", next_turn["get_invoice"].invoke({"invoice_id": "INV-1001"}))
 
     def test_model_cannot_choose_between_multiple_eligible_invoices(self):
-        from app.tools.support import tools_for_chat
         from app.refunds import pending_refund
+        from app.tools.support import tools_for_chat
 
         chat = storage.create_chat(storage.session_id(storage.new_session()))["id"]
         storage.set_verified_customer(chat, "cus_1003")
@@ -654,6 +671,193 @@ class HardeningTests(unittest.TestCase):
             self.assertEqual(existing.get("/api/chats").status_code, 200)
             self.assertEqual(existing.post("/api/session").status_code, 200)
 
+    def test_spoken_email_is_exact_and_failed_lookup_asks_for_spelling(self):
+        from app.tools.support import tools_for_chat
+
+        chat = storage.create_chat(storage.session_id(storage.new_session()))["id"]
+        tool = {t.name: t for t in tools_for_chat(chat)}["verify_customer"]
+        storage.add_message(chat, "user", "I'm Sam. Sam Patil")
+        with patch("app.tools.support.lookup_customer") as lookup:
+            lookup.invoke.side_effect = AssertionError("A name must not be used as an email")
+            result = tool.invoke({"email": "sam.patel@example.test"})
+        self.assertTrue(result["needs_email"])
+        self.assertIsNone(storage.verified_customer(chat))
+        storage.add_message(chat, "user", "sam.patil@example.test")
+        result = tool.invoke({"email": "sam.patel@example.test"})
+        self.assertFalse(result["verified"])
+        self.assertIn("spell", result["error"])
+        self.assertIn("sam.patil@example.test", result["error"])
+        self.assertIsNone(storage.verified_customer(chat))
+        storage.add_message(chat, "user", "s a m dot p a t e l at e x a m p l e dot t e s t")
+        result = tool.invoke({"email": "alex.morgan@example.test"})
+        self.assertEqual(result["customer_id"], "cus_1003")
+
+    def test_spoken_invoice_choice_stages_card_without_spoken_confirmation(self):
+        from app.agent.runner import run_turn
+        from app.refunds import pending_refund
+        from app.tools.support import tools_for_chat
+        from langchain_core.messages import AIMessageChunk
+
+        class Model:
+            def bind_tools(self, tools):
+                return self
+
+            async def astream(self, messages):
+                yield AIMessageChunk(
+                    content="This generic reply must not replace the pending confirmation."
+                )
+
+        for query in [
+            "Yes, invoice 3002.",
+            "INV 3002",
+            "invoice three zero zero two",
+            "the second one",
+        ]:
+            with self.subTest(query=query):
+                chat = storage.create_chat(storage.session_id(storage.new_session()))["id"]
+                storage.set_verified_customer(chat, "cus_1003")
+                tools = {t.name: t for t in tools_for_chat(chat)}
+                storage.add_message(chat, "user", "Please refund an eligible invoice.")
+                choice = tools["issue_mock_refund"].invoke({})
+                self.assertEqual(choice["status"], "invoice_choice_required")
+
+                async def select():
+                    with patch("app.agent.graph.ChatGoogleGenerativeAI", return_value=Model()):
+                        return [
+                            e async for e in run_turn(chat, query, "fake", "choice-" + uuid4().hex)
+                        ]
+
+                events = asyncio.run(select())
+                pending = pending_refund(chat)
+                self.assertEqual(pending["invoice_id"], "INV-3002")
+                self.assertEqual(pending["amount_cents"], 6900)
+                self.assertIn(
+                    "Click 'Confirm invoice and amount'",
+                    next(e["answer"] for e in events if e["type"] == "complete"),
+                )
+                for followup in ["I confirm invoice 3002 for 69 dollars.", "Where do I confirm?"]:
+
+                    async def repeat():
+                        with patch(
+                            "app.agent.runner.build_graph",
+                            side_effect=AssertionError(
+                                "Pending confirmation guidance needs no model or action replay"
+                            ),
+                        ):
+                            return [
+                                e
+                                async for e in run_turn(
+                                    chat, followup, "fake", "repeat-" + uuid4().hex
+                                )
+                            ]
+
+                    again = asyncio.run(repeat())
+                    self.assertTrue(
+                        any(
+                            e["type"] == "refund_pending"
+                            and e["result"]["token"] == pending["token"]
+                            for e in again
+                        )
+                    )
+                with connect() as db:
+                    self.assertEqual(
+                        db.execute(
+                            "SELECT count(*) AS n FROM refund_receipts WHERE chat_id=%s", (chat,)
+                        ).fetchone()["n"],
+                        0,
+                    )
+        chat = storage.create_chat(storage.session_id(storage.new_session()))["id"]
+        storage.set_verified_customer(chat, "cus_1003")
+        storage.add_message(chat, "user", "Refund invoice D2026")
+        result = {t.name: t for t in tools_for_chat(chat)}["issue_mock_refund"].invoke({})
+        self.assertEqual(result["status"], "invoice_choice_required")
+        self.assertIsNone(pending_refund(chat))
+
+    def test_confirmation_followup_reports_existing_owned_receipt(self):
+        from app.agent.runner import run_turn
+
+        owner_chat = storage.create_chat(storage.session_id(storage.new_session()))["id"]
+        storage.set_verified_customer(owner_chat, "cus_1001")
+        pending = stage_refund(owner_chat, "INV-1003")
+        receipt = confirm_refund(owner_chat, pending["token"], "INV-1003", 1900)
+
+        def cleanup():
+            with connect() as db:
+                db.execute(
+                    "DELETE FROM refund_receipts WHERE receipt_id=%s", (receipt["receipt_id"],)
+                )
+
+        self.addCleanup(cleanup)
+        storage.update_context(self.chat, {"user_selected_invoice_id": "INV-1003"})
+
+        async def run():
+            with patch(
+                "app.agent.runner.build_graph",
+                side_effect=AssertionError("An existing receipt needs no model or replay"),
+            ):
+                return [
+                    e
+                    async for e in run_turn(
+                        self.chat, "Where do I confirm?", "fake", "existing-" + uuid4().hex
+                    )
+                ]
+
+        events = asyncio.run(run())
+        receipts = storage.conversation_context(owner_chat)["refund_receipts"]
+        self.assertEqual(
+            [(r["receipt_id"], r["invoice_id"], r["amount_cents"]) for r in receipts],
+            [(receipt["receipt_id"], "INV-1003", 1900)],
+        )
+        other_chat = storage.create_chat(storage.session_id(storage.new_session()))["id"]
+        self.assertEqual(storage.conversation_context(other_chat)["refund_receipts"], [])
+        self.assertIn(
+            receipt["receipt_id"], next(e["answer"] for e in events if e["type"] == "complete")
+        )
+        self.assertTrue(
+            any(
+                e["type"] == "refund_pending"
+                and e["result"] is None
+                and e["receipt"]["receipt_id"] == receipt["receipt_id"]
+                for e in events
+            )
+        )
+
+    def test_receipt_recall_prioritizes_persisted_receipt(self):
+        from app.agent.runner import run_turn
+
+        chat = storage.create_chat(storage.session_id(storage.new_session()))["id"]
+        storage.set_verified_customer(chat, "cus_1001")
+        pending = stage_refund(chat, "INV-1003")
+        receipt = confirm_refund(chat, pending["token"], "INV-1003", 1900)
+
+        def cleanup():
+            with connect() as db:
+                db.execute(
+                    "DELETE FROM refund_receipts WHERE receipt_id=%s", (receipt["receipt_id"],)
+                )
+
+        self.addCleanup(cleanup)
+
+        async def run():
+            with patch(
+                "app.agent.runner.build_graph",
+                side_effect=AssertionError("Persisted receipt recall needs no model"),
+            ):
+                return [
+                    e
+                    async for e in run_turn(
+                        chat,
+                        "What is the receipt for that refund?",
+                        "fake",
+                        "receipt-" + uuid4().hex,
+                    )
+                ]
+
+        events = asyncio.run(run())
+        answer = next(e["answer"] for e in events if e["type"] == "complete")
+        self.assertIn(receipt["receipt_id"], answer)
+        self.assertIn("INV-1003", answer)
+
 
 class RecoveryTests(unittest.TestCase):
     def test_rate_limit_retry_after_timeout_and_5xx(self):
@@ -678,9 +882,7 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(deferred.exception.retry_after_seconds, 120)
         from email.utils import format_datetime
 
-        e.headers = {
-            "Retry-After": format_datetime(datetime.now(timezone.utc) + timedelta(seconds=120))
-        }
+        e.headers = {"Retry-After": format_datetime(datetime.now(UTC) + timedelta(seconds=120))}
         self.assertGreater(classify(e)[1], 110)
         from app.config import validate_runtime_config
 
@@ -810,12 +1012,12 @@ class GraphRecoveryTests(unittest.IsolatedAsyncioTestCase):
         with (
             patch("app.agent.graph.ChatGoogleGenerativeAI", return_value=model),
             patch("app.agent.graph.asyncio.sleep") as sleep,
+            self.assertRaises(RetryLater),
         ):
-            with self.assertRaises(RetryLater):
-                async for _ in build_graph("fake", "not-persisted", "retry-check").astream(
-                    {"messages": [HumanMessage("Help")], "results": []}, stream_mode="custom"
-                ):
-                    pass
+            async for _ in build_graph("fake", "not-persisted", "retry-check").astream(
+                {"messages": [HumanMessage("Help")], "results": []}, stream_mode="custom"
+            ):
+                pass
         self.assertEqual(model.calls, 1)
         sleep.assert_not_called()
 

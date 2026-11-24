@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityPanel, restoreTools, finishTool, Markdown, RefundCard, startTool, type PendingRefund, type Receipt, type ToolRun, type TraceEvent } from './Activity';
+import { InvoiceChoices, EmailCorrection, invoiceOptions, receiptFromResult, type InvoiceOption } from './ConversationActions';
+import { streamChat } from './streamChat';
 import SignalOrb, { type OrbState } from './SignalOrb';
 
 type Line = { id: number; speaker: 'user' | 'assistant'; text: string };
 type State = 'disconnected' | 'connecting' | 'ready';
-type ServerEvent =
+type ServerEvent = { type: 'refund_pending'; result: PendingRefund | null; receipt?: Receipt } | { type: 'input_required'; field: string }
   | { type: 'ready'; model: string; chat_id: string }
   | { type: 'transcript'; speaker: 'user' | 'assistant'; text: string }
   | { type: 'interrupted' | 'turn_complete' }
@@ -27,6 +29,8 @@ export default function VoiceApp() {
   const [speaking, setSpeaking] = useState(false);
   const [tools, setTools] = useState<ToolRun[]>([]);
   const [events, setEvents] = useState<TraceEvent[]>([]);
+  const [listedInvoices, setListedInvoices] = useState<InvoiceOption[]>([]);
+  const [needsEmail, setNeedsEmail] = useState(false);
   const [pendingRefund, setPendingRefund] = useState<PendingRefund | null>(null);
   const [agentAnswer, setAgentAnswer] = useState('');
   const [confirming, setConfirming] = useState(false);
@@ -36,6 +40,8 @@ export default function VoiceApp() {
   const [outputAnalyser, setOutputAnalyser] = useState<AnalyserNode | null>(null);
   const [interrupted, setInterrupted] = useState(false);
   const interruptTimerRef = useRef<number | null>(null);
+  const actionRef = useRef<HTMLDivElement>(null);
+  const railScrollRef = useRef<HTMLDivElement>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const micRef = useRef<MediaStream | null>(null);
   const inputContextRef = useRef<AudioContext | null>(null);
@@ -74,7 +80,7 @@ export default function VoiceApp() {
       sequenceRef.current = Math.max(0, ...chat.messages.map(message => message.id));
     }).catch(() => { /* Reconnect can still create a fresh chat. */ });
     void fetch(`/api/chats/${id}/traces`).then(async response => {
-      if (response.ok) { const traces = await response.json() as { events: TraceEvent[] }[]; if (traces[0]) { setEvents(traces[0].events); setTools(restoreTools(traces[0].events)); } }
+      if (response.ok) { const traces = await response.json() as { events: TraceEvent[] }[]; setListedInvoices(traces.map(trace => invoiceOptions(restoreTools(trace.events))).find(options => options.length) || []); if (traces[0]) { setNeedsEmail(traces[0].events.some(event => event.type === 'input_required' && event.field === 'email')); setEvents(traces[0].events); setTools(restoreTools(traces[0].events)); } }
     }).catch(() => {});
     void fetch(`/api/chats/${id}/refund-pending`).then(async response => {
       if (response.ok) setPendingRefund(await response.json() as PendingRefund | null);
@@ -185,6 +191,91 @@ export default function VoiceApp() {
     };
   }, []);
 
+  function handleServerEvent(message: ServerEvent) {
+    if (message.type === 'refund_pending') { setPendingRefund(message.result); if (message.receipt) setReceipt(message.receipt); setRailCollapsed(false); window.requestAnimationFrame(() => { railScrollRef.current?.scrollTo({ top: 0 }); actionRef.current?.focus({ preventScroll: true }); }); return; }
+    if (message.type === 'input_required') { setNeedsEmail(message.field === 'email'); return; }
+    if (message.type === 'tool_completed' && message.name === 'verify_customer') setNeedsEmail(false);
+        if (message.type === 'turn_started') {
+          setTools([]); setEvents([]); setAgentAnswer(''); setReceipt(null); setAgentBusy(true);
+        } else if (!['transcript', 'turn_complete'].includes(message.type)) {
+          setEvents(current => [...current.slice(-249), message as TraceEvent]);
+        }
+        if (message.type === 'ready') {
+          setModel(message.model);
+          chatIdRef.current = message.chat_id;
+          localStorage.setItem('loopp-chat-id', message.chat_id);
+          setState('ready');
+        } else if (message.type === 'transcript') {
+          addTranscript(message.speaker, message.text);
+        } else if (message.type === 'interrupted') {
+          clearPlayback();
+          activeSpeakerRef.current = null;
+          setInterrupted(true);
+          if (interruptTimerRef.current) window.clearTimeout(interruptTimerRef.current);
+          interruptTimerRef.current = window.setTimeout(() => setInterrupted(false), 1000);
+        } else if (message.type === 'turn_complete') {
+          activeSpeakerRef.current = null;
+        } else if (message.type === 'tool_started') {
+          setTools(current => startTool(current, message.name, message));
+        } else if ((message.type === 'tool_completed' || message.type === 'tool_failed' || message.type === 'tool_blocked')) {
+          const existing = receiptFromResult(message.result);
+          if (existing) { setReceipt(existing); setPendingRefund(null); }
+          if (message.type === 'tool_completed' && message.name === 'issue_mock_refund' && message.result && typeof message.result === 'object' && 'status' in message.result && message.result.status === 'invoice_choice_required') {
+            setListedInvoices(invoiceOptions([{ id: 0, name: message.name, status: 'done', startedAt: 0, result: message.result }]));
+          }
+          if (message.name === 'issue_mock_refund' && message.result && typeof message.result === 'object' && 'status' in message.result && message.result.status === 'confirmation_required') {
+            setPendingRefund(message.result as PendingRefund);
+            setReceipt(null);
+            setListedInvoices([]);
+          }
+          setTools(current => finishTool(current, message.name, message.result, message));
+        } else if (message.type === 'grounding') {
+          setTools(current => current.map((tool, index) => index === current.map(item => item.name).lastIndexOf('search_policy') ? { ...tool, result: message.result } : tool));
+        } else if (message.type === 'agent_answer') {
+          setAgentAnswer(message.answer);
+          setAgentBusy(false);
+        } else if (message.type === 'agent_error') {
+          setError(message.message); setAgentBusy(false);
+        } else if (message.type === 'notice') {
+          setError(message.message);
+        } else if (message.type === 'error') {
+          setError(message.message);
+          wsRef.current?.close();
+        }
+  }
+
+  async function sendAction(text: string) {
+    const id = chatIdRef.current;
+    if (!id || agentBusy || confirming) return;
+    setError('');
+    clearPlayback();
+    activeSpeakerRef.current = null;
+    addTranscript('user', text);
+    handleServerEvent({ type: 'turn_started', call_id: crypto.randomUUID() });
+    try {
+      await streamChat(id, text, event => {
+        if (event.type === 'complete') {
+          activeSpeakerRef.current = null;
+          addTranscript('assistant', String(event.answer));
+          handleServerEvent({ type: 'agent_answer', answer: String(event.answer) });
+        } else if (event.type === 'error') handleServerEvent({ type: 'agent_error', message: String(event.message) });
+        else if (event.type !== 'delta') handleServerEvent(event as ServerEvent);
+      });
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not complete the request.'); }
+    finally { setAgentBusy(false); }
+  }
+
+  const choiceKey = listedInvoices.map(item => item.invoice_id).join(',');
+  useEffect(() => {
+    if (!pendingRefund && !choiceKey && !needsEmail) return;
+    setRailCollapsed(false);
+    const frame = window.requestAnimationFrame(() => {
+      railScrollRef.current?.scrollTo({ top: 0, behavior: 'auto' });
+      if (pendingRefund) actionRef.current?.focus({ preventScroll: true });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [pendingRefund?.token, choiceKey, needsEmail]);
+
   async function connect() {
     if (state !== 'disconnected') return;
     const connectionId = ++connectionIdRef.current;
@@ -248,48 +339,7 @@ export default function VoiceApp() {
           playPcm(event.data);
           return;
         }
-        const message = JSON.parse(event.data) as ServerEvent;
-        if (message.type === 'turn_started') {
-          setTools([]); setEvents([]); setAgentAnswer(''); setAgentBusy(true);
-        } else if (!['transcript', 'turn_complete'].includes(message.type)) {
-          setEvents(current => [...current.slice(-249), message as TraceEvent]);
-        }
-        if (message.type === 'ready') {
-          setModel(message.model);
-          chatIdRef.current = message.chat_id;
-          localStorage.setItem('loopp-chat-id', message.chat_id);
-          setState('ready');
-        } else if (message.type === 'transcript') {
-          addTranscript(message.speaker, message.text);
-        } else if (message.type === 'interrupted') {
-          clearPlayback();
-          activeSpeakerRef.current = null;
-          setInterrupted(true);
-          if (interruptTimerRef.current) window.clearTimeout(interruptTimerRef.current);
-          interruptTimerRef.current = window.setTimeout(() => setInterrupted(false), 1000);
-        } else if (message.type === 'turn_complete') {
-          activeSpeakerRef.current = null;
-        } else if (message.type === 'tool_started') {
-          setTools(current => startTool(current, message.name, message));
-        } else if ((message.type === 'tool_completed' || message.type === 'tool_failed' || message.type === 'tool_blocked')) {
-          if (message.name === 'issue_mock_refund' && message.result && typeof message.result === 'object' && 'status' in message.result && message.result.status === 'confirmation_required') {
-            setPendingRefund(message.result as PendingRefund);
-            setReceipt(null);
-          }
-          setTools(current => finishTool(current, message.name, message.result, message));
-        } else if (message.type === 'grounding') {
-          setTools(current => current.map((tool, index) => index === current.map(item => item.name).lastIndexOf('search_policy') ? { ...tool, result: message.result } : tool));
-        } else if (message.type === 'agent_answer') {
-          setAgentAnswer(message.answer);
-          setAgentBusy(false);
-        } else if (message.type === 'agent_error') {
-          setError(message.message); setAgentBusy(false);
-        } else if (message.type === 'notice') {
-          setError(message.message);
-        } else if (message.type === 'error') {
-          setError(message.message);
-          ws.close();
-        }
+        handleServerEvent(JSON.parse(event.data) as ServerEvent);
       };
       ws.onerror = () => {
         if (wsRef.current === ws) {
@@ -368,11 +418,15 @@ export default function VoiceApp() {
       </section>
       <aside className={`voice-rail ${railCollapsed ? 'is-collapsed' : ''}`} aria-label="Conversation details">
         <div className="voice-rail-heading"><span>Conversation details</span><button type="button" aria-label={railCollapsed ? 'Show conversation details' : 'Minimize conversation details'} aria-expanded={!railCollapsed} aria-controls="voice-details-body" title={railCollapsed ? 'Show details' : 'Minimize details'} onClick={() => setRailCollapsed(value => !value)}>{railCollapsed ? '‹' : '›'}</button></div>
-        <div className="voice-rail-scroll" id="voice-details-body" hidden={railCollapsed}>
+        <div className="voice-rail-scroll" id="voice-details-body" hidden={railCollapsed} ref={railScrollRef}>
+        <div ref={actionRef} tabIndex={-1} role="region" aria-label="Conversation actions">
+          {(pendingRefund || receipt) && <RefundCard pending={pendingRefund} receipt={receipt} busy={confirming} onConfirm={() => void confirmRefund()} />}
+          {needsEmail && <EmailCorrection busy={agentBusy} onSubmit={email => void sendAction(email)} />}
+          {!pendingRefund && !receipt && <InvoiceChoices options={listedInvoices} busy={agentBusy} onSelect={id => void sendAction(`Please prepare a mock refund for ${id}.`)} />}
+        </div>
         <section className="transcript-panel" aria-label="Live transcript"><div className="section-heading"><div><span className="section-kicker">Conversation</span><h2>Live transcript</h2></div><span className="transcript-count">{lines.length ? `${lines.length} messages` : 'Waiting'}</span></div>
           {lines.length === 0 ? <div className="transcript-empty"><span className="transcript-rule" /><p>Your words and Loopp’s responses will appear here.</p></div> : <div className="transcript-lines" aria-live="polite">{lines.map(line => <div key={line.id} className={`transcript-line ${line.speaker}`}><span className="transcript-speaker">{line.speaker === 'user' ? 'You' : 'Loopp'}</span><p>{line.text}</p></div>)}</div>}</section>
         <ActivityPanel tools={tools} events={events} receipts={refundReceipts} compact />
-        {(pendingRefund || receipt) && <RefundCard pending={pendingRefund} receipt={receipt} busy={confirming} onConfirm={() => void confirmRefund()} />}
         {agentAnswer && !lines.some(line => line.speaker === 'assistant' && line.text.includes(agentAnswer.slice(0, 20))) && <div className="agent-answer"><span className="section-kicker">Checked answer</span><Markdown>{agentAnswer}</Markdown></div>}
         </div>
       </aside>

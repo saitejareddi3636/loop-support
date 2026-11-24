@@ -14,6 +14,7 @@ from app.storage import (
     user_invoice_ids,
 )
 from app.tools.customer import verify_customer as lookup_customer
+from app.identifiers import supplied_email, selected_invoice_ids, partial_invoice_reference
 
 
 def invoice_state(chat_id, invoice, db):
@@ -83,9 +84,40 @@ def tools_for_chat(chat_id: str):
     @tool
     def verify_customer(email: str) -> dict:
         """Resolve the customer's fictional email once and retain it for this conversation. Never guess an email."""
-        result = lookup_customer.invoke({"email": email})
+        messages = get_chat(chat_id)["messages"]
+        latest = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+        actual = supplied_email(latest)
+        bound = verified_customer(chat_id)
+        if not actual and bound:
+            account = account_by_customer(bound)
+            return {
+                "verified": True,
+                "customer_id": bound,
+                "name": account["name"],
+                "mock_identity": True,
+            }
+        if not actual:
+            return {
+                "verified": False,
+                "outcome": "needs_information",
+                "needs_email": True,
+                "error": "Please spell your complete email address, including dots and the domain, or type it in the email box on screen. A name alone cannot identify an account.",
+            }
+        result = lookup_customer.invoke({"email": actual})
         if result.get("verified"):
+            if bound and bound != result["customer_id"]:
+                return {
+                    "verified": False,
+                    "outcome": "needs_information",
+                    "error": "Start a new conversation to switch the demo account.",
+                }
             set_verified_customer(chat_id, result["customer_id"])
+        else:
+            result.update(
+                outcome="needs_information",
+                needs_email=True,
+                error=f"I couldn't find an account for {actual}. Please spell the complete email address, letter by letter, including dots and the domain, or type it in the email box on screen.",
+            )
         return result
 
     @tool
@@ -113,7 +145,7 @@ def tools_for_chat(chat_id: str):
 
     @tool
     def list_invoices() -> dict:
-        """List the verified account's real invoices and backend refund eligibility. Use for 'Do I have any eligible refunds?' or when no invoice ID was supplied. Does not stage or issue refunds."""
+        """List owned invoices with amounts, dates, and status for billing review. Also returns backend eligibility fields when the customer asks about personal refund eligibility. Does not stage or issue refunds, and is not a refund offer by itself."""
         return owned_invoices(chat_id)
 
     @tool
@@ -131,19 +163,25 @@ def tools_for_chat(chat_id: str):
         # A model-supplied argument or a model's invoice lookup is not a user choice.
         messages = get_chat(chat_id)["messages"]
         latest = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        ids = user_invoice_ids(latest)
+        references = conversation_context(chat_id)["references"]
+        ids = selected_invoice_ids(latest, references)
         selected = next(iter(ids)) if len(ids) == 1 else None
-        if not ids:
-            selected = conversation_context(chat_id)["references"].get("user_selected_invoice_id")
+        partial = partial_invoice_reference(latest)
+        if not ids and not partial:
+            selected = references.get("user_selected_invoice_id")
         if selected:
-            return stage_refund(chat_id, selected)
+            result = stage_refund(chat_id, selected)
+            if result.get("status") in ("confirmation_required", "already_refunded"):
+                update_context(chat_id, {"awaiting_refund_invoice_choice": False})
+            return result
         listing = owned_invoices(chat_id)
         if "error" in listing:
             return listing
         eligible = [i for i in listing["invoices"] if i["eligible"]]
         if not eligible:
             return {"status": "no_eligible_invoices", **listing}
-        if len(eligible) > 1 or len(ids) > 1:
+        if len(eligible) > 1 or len(ids) > 1 or partial:
+            update_context(chat_id, {"awaiting_refund_invoice_choice": True})
             return {
                 "status": "invoice_choice_required",
                 "invoices": eligible,

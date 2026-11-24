@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from psycopg.types.json import Jsonb
 from app.db import connect
+from app.identifiers import invoice_ids, selected_invoice_ids, partial_invoice_reference
 
 
 def session_id(token):
@@ -173,17 +174,37 @@ def conversation_context(chat_id):
     account = account_by_customer(customer_id) if customer_id else None
     with connect() as db:
         row = db.execute("SELECT context FROM chats WHERE id=%s", (chat_id,)).fetchone()
-    return {"account": account, "references": row["context"] if row else {}}
+        receipts = db.execute(
+            "SELECT r.receipt_id,r.invoice_id,r.amount_cents,i.currency,r.created_at FROM refund_receipts r JOIN invoices i USING(invoice_id) WHERE r.chat_id=%s ORDER BY r.created_at",
+            (chat_id,),
+        ).fetchall()
+        tickets = db.execute(
+            "SELECT ticket_id,category,status,reason FROM escalation_tickets WHERE chat_id=%s ORDER BY created_at",
+            (chat_id,),
+        ).fetchall()
+    return {
+        "account": account,
+        "references": row["context"] if row else {},
+        "refund_receipts": receipts,
+        "open_tickets": [t for t in tickets if t.get("status") == "open"],
+        "tickets": tickets,
+    }
 
 
 def user_invoice_ids(text):
-    return {value.upper() for value in re.findall(r"\bINV-(?:D\d{8}-\d+|\d+)\b", text, re.I)}
+    return invoice_ids(text)
 
 
 def remember_invoice_choice(chat_id, query):
     """Only original user input can establish an explicit invoice selection."""
-    ids = user_invoice_ids(query)
+    references = conversation_context(chat_id)["references"]
+    ids = selected_invoice_ids(query, references)
     if ids:
         update_context(
             chat_id, {"user_selected_invoice_id": next(iter(ids)) if len(ids) == 1 else None}
         )
+    elif partial_invoice_reference(query):
+        values = {"user_selected_invoice_id": None}
+        if re.search(r"(?i)\brefund\b", query):
+            values["awaiting_refund_invoice_choice"] = True
+        update_context(chat_id, values)

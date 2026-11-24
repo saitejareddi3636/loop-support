@@ -3,22 +3,28 @@
 import asyncio
 import hashlib
 import json
-import time
 import logging
+import re
+import time
 from uuid import uuid4
+
 from langchain_core.messages import AIMessage, HumanMessage
+
+from app.agent.answers import refund_reply
+from app.agent.conversation import social_reply
+from app.agent.graph import build_graph
 from app.db import connect
+from app.identifiers import invoice_ids
+from app.refunds import existing_refund, pending_refund
+from app.resilience import RetryLater, classify
 from app.storage import (
-    get_chat,
     add_message,
-    record_trace,
-    offer_escalation,
     conversation_context,
+    get_chat,
+    offer_escalation,
+    record_trace,
     remember_invoice_choice,
 )
-from app.resilience import classify, RetryLater
-from app.agent.graph import build_graph
-from app.agent.conversation import social_reply
 
 
 async def run_turn(chat_id, query, api_key, request_id=None):
@@ -76,6 +82,65 @@ async def run_turn(chat_id, query, api_key, request_id=None):
         ]
         context = await asyncio.to_thread(conversation_context, chat_id)
         answer = social_reply(query, existing["messages"], context)
+        if not answer and re.search(r"(?i)\b(confirm|confirmation|button)\b", query):
+            pending = await asyncio.to_thread(pending_refund, chat_id)
+            if pending:
+                answer = refund_reply(pending)
+                pending_event = {"type": "refund_pending", "result": pending, "trace_id": trace_id}
+                events.append(pending_event)
+                yield pending_event
+            else:
+                selected = context.get("references", {}).get("user_selected_invoice_id")
+                if selected:
+                    with connect() as db:
+                        receipt = existing_refund(db, chat_id, selected)
+                    if receipt:
+                        answer = refund_reply(receipt)
+                        receipt_event = {
+                            "type": "refund_pending",
+                            "result": None,
+                            "receipt": receipt,
+                            "trace_id": trace_id,
+                        }
+                        events.append(receipt_event)
+                        yield receipt_event
+        if (
+            not answer
+            and context.get("refund_receipts")
+            and re.search(
+                r"(?i)\b(?:receipt|already refunded|completed (?:refund|transaction)|"
+                r"what (?:invoice )?(?:did you|was) refund|that (?:refund|transaction)|mock_[0-9a-f]{6,})\b",
+                query,
+            )
+        ):
+            receipts = context["refund_receipts"]
+            selected = context.get("references", {}).get("user_selected_invoice_id")
+            mentioned = invoice_ids(query)
+            pick = None
+            if selected:
+                pick = next((r for r in receipts if r.get("invoice_id") == selected), None)
+            if not pick and mentioned:
+                pick = next((r for r in receipts if r.get("invoice_id") in mentioned), None)
+            if not pick:
+                pick = receipts[-1]
+            receipt = {
+                "status": "already_refunded",
+                "mock": True,
+                "replayed": True,
+                "receipt_id": pick["receipt_id"],
+                "invoice_id": pick["invoice_id"],
+                "amount_cents": pick["amount_cents"],
+                "currency": pick.get("currency") or "USD",
+            }
+            answer = refund_reply(receipt)
+            receipt_event = {
+                "type": "refund_pending",
+                "result": None,
+                "receipt": receipt,
+                "trace_id": trace_id,
+            }
+            events.append(receipt_event)
+            yield receipt_event
         if answer:
             events.append(
                 {
@@ -112,6 +177,10 @@ async def run_turn(chat_id, query, api_key, request_id=None):
                     yield event
         if not answer.strip():
             raise RuntimeError("No final answer")
+        if re.search(r"(?i)(?:spell.{0,60}email|what.{0,35}email|type.{0,30}email)", answer):
+            input_event = {"type": "input_required", "field": "email", "trace_id": trace_id}
+            events.append(input_event)
+            yield input_event
         if emitted != answer:
             if emitted:
                 yield {"type": "answer_reset"}

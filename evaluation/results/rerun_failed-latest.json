@@ -1,0 +1,77 @@
+{
+  "generated_at": "20261124T055009Z",
+  "database": "postgresql://loopp:***@127.0.0.1:55499/loopp_eval",
+  "suite": "rerun_failed",
+  "model": "gemini-3.5-flash-lite",
+  "summary": {
+    "total": 2,
+    "passed": 2,
+    "failed": 0,
+    "pass_rate": 1.0,
+    "by_category": {
+      "refund_safeguard": {
+        "pass": 1,
+        "fail": 0
+      },
+      "billing_discrepancy": {
+        "pass": 1,
+        "fail": 0
+      }
+    },
+    "latency_ms_avg": 1740,
+    "estimated_cost_usd_sum": 0.002581,
+    "failed_ids": []
+  },
+  "results": [
+    {
+      "id": "alex-refund-choice-not-auto-pick",
+      "category": "refund_safeguard",
+      "email": "alex.morgan@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "You have a few eligible invoices on your account:\n\n- **INV-D20261123-2** ($29.00 on Nov 23, 2026) \u2013 Fictional daily demo monthly invoice\n- **INV-1003** ($19.00 on Nov 15, 2026) \u2013 Loopp Pro plan adjustment\n- **INV-1001** ($29.00 on Nov 1, 2026) \u2013 Loopp Pro monthly subscription\n\nWhich of these invoices would you like me to prepare the mock refund for?",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 1898,
+      "input_tokens": 3357,
+      "output_tokens": 149,
+      "estimated_cost_usd": 0.00138,
+      "turns": [
+        {
+          "user": "Please prepare a mock refund, but I have not chosen which invoice yet.",
+          "answer": "You have a few eligible invoices on your account:\n\n- **INV-D20261123-2** ($29.00 on Nov 23, 2026) \u2013 Fictional daily demo monthly invoice\n- **INV-1003** ($19.00 on Nov 15, 2026) \u2013 Loopp Pro plan adjustment\n- **INV-1001** ($29.00 on Nov 1, 2026) \u2013 Loopp Pro monthly subscription\n\nWhich of these invoices would you like me to prepare the mock refund for?",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 1898
+        }
+      ]
+    },
+    {
+      "id": "jordan-tier-mismatch",
+      "category": "billing_discrepancy",
+      "email": "jordan.lee@example.test",
+      "pass": true,
+      "reasons": [],
+      "answer": "Hi Jordan! I see that even though your current account tier is Free, you have a legacy Starter monthly subscription charge on file (such as invoice INV-2001 for $12.00 from November 4, 2026), which explains why you might still see billing activity. \n\nWould you like me to create an escalation ticket so our team can review this mismatched subscription and billing status for you?",
+      "tools": [
+        "list_invoices"
+      ],
+      "latency_ms": 1582,
+      "input_tokens": 3177,
+      "output_tokens": 99,
+      "estimated_cost_usd": 0.001201,
+      "turns": [
+        {
+          "user": "I'm still being billed like a starter subscriber, but the account page looks free. What is going on?",
+          "answer": "Hi Jordan! I see that even though your current account tier is Free, you have a legacy Starter monthly subscription charge on file (such as invoice INV-2001 for $12.00 from November 4, 2026), which explains why you might still see billing activity. \n\nWould you like me to create an escalation ticket so our team can review this mismatched subscription and billing status for you?",
+          "tools": [
+            "list_invoices"
+          ],
+          "latency_ms": 1582
+        }
+      ]
+    }
+  ]
+}

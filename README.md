@@ -1,101 +1,135 @@
-# Loopp
+# Loopp Customer Support Agent
 
-A fictional customer-support agent with streaming chat, live voice, policy retrieval, and mock refunds.
+A full-stack, fictional customer-support agent for the Loopp assessment: streaming text chat, real-time voice, multi-step tool orchestration, policy retrieval with confidence guardrails, shared conversation memory, and production-minded observability and failure handling.
 
-Live URL: [https://loopp-support.pages.dev](https://loopp-support.pages.dev)
+Mock refunds never move money. Demo email lookup is identity resolution for the demo, not authentication.
 
-Demo account: sam.patel@example.test
+## Live application and demonstration
 
-<!-- TODO: Loom link -->
-<!-- TODO: screenshot -->
+| Resource | Status |
+| --- | --- |
+| Live app | [https://loopp-support.pages.dev](https://loopp-support.pages.dev) |
+| Loom walkthrough | *Pending — recording not yet attached* |
 
-## Try this
+## Demo accounts and example workflows
 
-1. Start a conversation: “I'm sam.patel@example.test. List my eligible refunds.”
-2. Choose an invoice from the returned list: “Prepare a mock refund for [invoice ID].”
-3. Check its invoice and amount, then click **Confirm invoice and amount**. Spoken agreement does not issue a refund.
-4. Ask: “What is the Business monthly refund policy?” Inspect the policy citations.
-5. Ask an out-of-scope question: “Does Loopp cover a refund for my restaurant meal?”
-6. Switch to Voice, allow microphone access, ask a question, and interrupt while the agent speaks.
+Seeded fictional accounts (email pattern `firstname.lastname@example.test`):
 
-## Architecture
+| Email | Tier | Status | Useful for |
+| --- | --- | --- | --- |
+| `sam.patel@example.test` | Business | active | Eligible monthly invoices, policy Q&A, mock refund confirmation |
+| `alex.morgan@example.test` | Pro | active | Multi-invoice choice, ownership boundaries |
+| `jordan.lee@example.test` | Free | active | Billing discrepancy / tier mismatch without unsolicited refunds |
+| `taylor.chen@example.test` | Enterprise | active | Human-review refund path, ticket consent |
+| `avery.reed@example.test` | Free | suspended | Account restrictions stated without inventing causes |
+
+**Suggested workflows**
+
+1. Text: identify as Sam → list recent charges → ask a Business refund-window policy question → prepare a mock refund for one owned invoice → confirm only via **Confirm invoice and amount**.
+2. Text: as Alex, ask about Sam’s invoice ID → expect an ownership refusal with no cross-customer facts.
+3. Text: as Jordan, ask why the account still looks Free after a Starter charge → expect account/invoice facts, not an automatic refund offer.
+4. Voice: open Voice, allow the microphone, ask an account or policy question, interrupt while the agent speaks, then continue in the same conversation from Chat.
+
+## Core capabilities
+
+Aligned with the assessment requirements:
+
+- **Full-stack agent** — React UI, FastAPI API, PostgreSQL, Cloudflare Pages + Oracle deployment path.
+- **Streaming text chat** — Server-sent events with progressive deltas after grounded composition.
+- **Real-time voice** — Gemini Live native audio over WebSocket; waveform orb, transcripts, barge-in / interruption handling in the browser bridge.
+- **Autonomous multi-step tools** — LangGraph selects among verify, account, invoice, list, policy search, mock refund staging, and escalation ticket creation by intent.
+- **Vector retrieval** — pgvector over section-aware policy chunks with version/tier/date filters.
+- **Confidence guardrails** — Similarity threshold, citation revalidation, optional relevance verifier, fail-closed escalation offers (no ticket without consent).
+- **Shared memory** — One `chat_id` and PostgreSQL-backed messages, context, receipts, and tickets across Chat and Voice.
+- **Observability** — Prompt traces, tool timing, latency, text token usage, and text-only cost estimates in the Activity panel and persisted traces.
+- **Failure handling** — Retries with budgets for transient provider errors, rate limits, voice socket caps, and deterministic financial safeguards independent of model wording.
+
+## System architecture
 
 ```mermaid
 flowchart LR
-    B[Browser] --> P[Cloudflare Pages Function]
-    P -->|Gateway secret| C[Caddy]
+    B[Browser Chat / Voice] --> P[Cloudflare Pages Function]
+    P -->|Gateway secret| C[Caddy TLS]
     C --> A[FastAPI]
-    A --> L[LangGraph]
-    L --> T[Backend tools]
-    L --> V[PostgreSQL / pgvector]
-    L --> G[Gemini text and embeddings]
+    A --> R[Turn runner]
+    R --> L[LangGraph + Gemini text]
+    L --> T[Support tools]
+    L --> V[(PostgreSQL / pgvector)]
     T --> V
-    B <-->|Voice WebSocket via Pages and Caddy| A
-    A <-->|Native audio WebSocket| GL[Gemini Live]
+    B <-->|Voice WebSocket| A
+    A <-->|Native audio| GL[Gemini Live]
 ```
 
-React/TypeScript renders chat and voice. FastAPI streams text over SSE and bridges
-native Gemini Live audio. Both modes share persisted conversations and LangGraph
-tools. The gateway secret stays in Pages/Oracle configuration, outside the browser.
+React/TypeScript renders Chat and Voice. FastAPI streams text over SSE and bridges Gemini Live audio. Both modes share persisted conversations and the same tool surface. Secrets stay in server/Pages configuration, not the browser bundle.
 
-Policy documents use section-aware chunks targeting roughly 180–300 estimated
-tokens with sentence overlap. Content hashes reuse unchanged 768-dimensional
-embeddings. Retrieval filters active versions, dates, and tier before ranking
-four matches; policy citations are revalidated against stored source text.
+## Agent orchestration and conversation memory
 
-## Guardrail evaluation
+The system prompt frames a **general** support assistant, not a refund-only bot. Capabilities are separate: identity, account status, invoice facts, invoice inventory, policy retrieval, refund staging, and tickets. The model chooses tools from conversation context; the backend still owns authorization.
 
-These tables record real embedding and verifier calls with `RELEVANCE_VERIFIER=on`.
-“Correct” means accepting an in-scope question or rejecting an out-of-scope one;
-it does not measure answer correctness. Counts are shown without rounding.
-The original set was rerun after the ticket-information prompt clarification.
+**Backend-deterministic controls**
 
-Original 20-query set:
+- Customer verification and invoice ownership
+- Refund eligibility, staging TTL, confirmation token, and idempotent issuance
+- Ticket creation only after clear customer authorization
+- Fact checks that strip unsupported amounts, IDs, and unsolicited refund offers
 
-| Group | Queries | Retrieval-only correct | Verified correct |
-| --- | ---: | ---: | ---: |
-| In scope | 10 | 10/10 | 10/10 |
-| Out of scope | 10 | 9/10 | 10/10 |
+**Conversation memory** includes verified account fields, selected invoice references, open tickets, and persisted mock receipts. After identity verification, the agent continues the customer’s earlier unresolved concern instead of resetting. Abandoned refund intents and topic changes are handled by intent-led tool choice plus compose rules that avoid volunteering refund cards.
 
-Frozen 30-query set, written before measurement and not tuned afterwards:
+## RAG, chunking, retrieval, and confidence guardrails
 
-| Group | Queries | Retrieval-only correct | Verified correct |
-| --- | ---: | ---: | ---: |
-| In-scope paraphrases | 15 | 15/15 | 13/15 |
-| Challenging out-of-scope | 15 | 0/15 | 15/15 |
+Policy documents are split with section-aware chunking (roughly 180–300 estimated tokens, sentence overlap). Unchanged chunks reuse content-hashed 768-dimensional embeddings. Retrieval keeps active versions, filters by date and tier, ranks a small top-k, and revalidates citations against stored source text.
 
-All 30 frozen queries passed the **0.68** retrieval threshold. The maximum
-out-of-scope similarity was **0.789**, above the minimum in-scope similarity of
-**0.690**. The scores overlap: raising a similarity cutoff alone cannot separate
-these sets without rejecting valid questions. The original set's extrema were
-0.743 out of scope and 0.699 in scope.
+With `RELEVANCE_VERIFIER=on` (default), a bounded relevance model must accept the passage before it grounds an answer. Timeouts, rate limits, and malformed verdicts fail closed and offer escalation without creating a ticket.
 
-Two known false rejections remain: the **Pro monthly refund-window** paraphrase
-(0.743) and the **subscription-ending process** question (0.707). The verifier is
-conservative and adds a model call; the held-out results were not used to tune it.
+**Retrieval guardrail measurements** (embedding + verifier calls; “correct” = accept in-scope or reject out-of-scope, not answer quality):
 
-The verifier runs only after retrieval passes. Timeout, 429, malformed output,
-or detected verdict-override instructions fail closed with:
-“I couldn't verify that right now. Would you like a human support ticket?”
-An escalation offer does not create a ticket without consent.
+| Set | Group | Retrieval-only | Verified |
+| --- | --- | ---: | ---: |
+| Original 20 | In scope (10) | 10/10 | 10/10 |
+| Original 20 | Out of scope (10) | 9/10 | 10/10 |
+| Frozen 30 | In-scope paraphrases (15) | 15/15 | 13/15 |
+| Frozen 30 | Challenging out-of-scope (15) | 0/15 | 15/15 |
 
-Set **`RELEVANCE_VERIFIER=off`** to disable the additional relevance model.
-This deliberately restores retrieval-only decisions, including their false
-positives. The 0.68 threshold, applicability/citation checks, session isolation,
-and all backend refund/ticket protections remain enabled. The default is `on`.
+Similarity alone cannot separate the frozen sets (out-of-scope max **0.789** vs in-scope min **0.690** at threshold **0.68**). Two known false rejections remain on the frozen in-scope paraphrases. Held-out frozen queries were not used to tune the verifier.
 
-## Rate limits and failure handling
+## Real-time voice and streaming
 
-- New sessions: 10/minute and 100/day per network peer; 200/minute and 5,000/day globally in production. Existing valid browser sessions are reused.
-- Agent requests: 12/minute per session in production; excess requests return 429.
-- Text and embedding lookups retry provider 429s, timeouts, and transient upstream failures up to three attempts within a 45-second budget. Valid `Retry-After` instructions are respected; excessive waits return a retry-later state. State-changing tools are not automatically replayed.
-- Voice: 30-minute cap, one socket per session and three globally per API worker by default. Page exit or two minutes in a hidden tab releases voice resources.
-- Refunds: backend ownership, eligibility, expiration, invoice/amount confirmation, and persisted idempotency checks apply independently of model output.
-- Relevance verification: one bounded ten-second call, no automatic retry; failures return the verification-unavailable message above and offer escalation.
+Voice uses Gemini Live over a server WebSocket. The client captures microphone audio, renders an analyser-driven waveform, shows transcripts, and supports interruption while the agent speaks. Each spoken turn is executed through the same `run_turn` pipeline as text (`support_request`), so tools, memory, and safeguards stay consistent.
+
+Text chat streams SSE events (model progress, tools, composed answer deltas). Final customer-visible wording is composed after tool results and grounding so financial and ticket language stays backend-safe.
+
+**Automated vs manual voice**
+
+| Check | Coverage |
+| --- | --- |
+| Backend WebSocket / session limits | Automated in the regression suite |
+| Shared chat↔voice `chat_id` and tool path | Automated + live LLM scenarios |
+| Microphone, speaker playback, mute, spoken barge-in | **Manual browser validation only** |
+
+## Observability and failure handling
+
+- Prompt and tool traces persisted per turn; Activity UI shows tools, latency, tokens, and text-only cost estimates.
+- Sessions: creation quotas per peer/global; agent rate limits return 429.
+- Provider 429/timeouts: up to three attempts inside a 45s budget; state-changing tools are not blindly replayed.
+- Voice: per-session and global socket caps; idle/hidden-tab release.
+- Refunds and tickets remain enforceable even if the model hallucinates wording.
+
+Displayed cost is a **text-only estimate**. Live audio and embedding costs are unavailable from the provider path used here and are not fabricated into a session total.
+
+## Engineering challenges, decisions, and trade-offs
+
+| Challenge | Approach | Trade-off |
+| --- | --- | --- |
+| Context retention after verify | Inject verified account/receipts/tickets into model context; continue prior concern after identity | Slightly larger prompts; fewer redundant `get_account` calls |
+| Refund-assistant drift | Intent-separated tools, strip unsolicited refund offers in compose, UI refund cards only when choice is required | Occasional model attempts still occur; backend/UI block bad outcomes |
+| Wrong tool / failed policy wiping facts | Compose keeps invoice/account summaries when policy retrieval is not GROUNDED | May answer with structured facts plus an honest “policy not verified” note |
+| Retrieval relevance overlap | Threshold + citation checks + relevance verifier | Extra model call; two known in-scope false rejects on the frozen set |
+| Safe transactions | Eligibility, ownership, button confirmation, idempotency in PostgreSQL; spoken yes cannot issue | Demo cannot show “say yes to refund” UX by design |
+| Ticket honesty | Demo tickets record requests; copy does not promise a live team follow-up | Less “support theater,” clearer demo boundaries |
 
 ## Local setup
 
-Requires Python 3.11+, Node 20+, Docker Compose, and access to the configured Gemini models.
+Requires Python 3.11+, Node 20+, Docker Compose, and a Gemini API key.
 
 ```sh
 cp .env.example .env
@@ -103,7 +137,7 @@ python3 -m venv .venv
 .venv/bin/pip install -r backend/requirements.txt
 ```
 
-Set the Gemini key and matching database passwords in your local `.env`, then:
+Set `GEMINI_API_KEY` and matching database passwords in `.env`, then:
 
 ```sh
 docker compose up -d db
@@ -112,51 +146,90 @@ cd backend
 ../.venv/bin/python seed_data.py
 ../.venv/bin/python seed_policies.py
 ../.venv/bin/python refresh_demo.py
-../.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000
+../.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001
 ```
 
-In another terminal: `cd frontend && npm ci && npm run dev`.
-Open http://127.0.0.1:5173. Operations and the key-rotation warning are in
-[deploy/README.md](deploy/README.md); keep secrets, certificates, and backups outside Git.
-
-## Tests
-
-The full backend suite contains **46 tests**: 27 non-DB checks and 19 PostgreSQL
-checks. It covers session isolation/quotas, tool recovery, ticket consent,
-refund ownership/eligibility/confirmation/idempotency, citation applicability,
-verifier on/off modes and failures, trace fields, voice socket limits, and
-insert-only daily demo invoices. DB tests create a disposable database; the
-configured account needs permission to create/drop it.
-
-From `backend/`:
+In another terminal:
 
 ```sh
+cd frontend
+npm ci
+LOOPP_API_TARGET=http://127.0.0.1:8001 npm run dev -- --host 127.0.0.1 --port 5174
+```
+
+Open [http://127.0.0.1:5174](http://127.0.0.1:5174). Production operations, TLS, backups, and key-rotation notes: [deploy/README.md](deploy/README.md). Keep secrets, certificates, and backups out of Git.
+
+## CI/CD
+
+GitHub Actions on this repository:
+
+| Workflow | Trigger | What it does |
+| --- | --- | --- |
+| `CI` | Pull requests and pushes | Backend regression suite (ephemeral Postgres) and frontend production build |
+| `Deploy production` | Push to `main` (and manual dispatch) | Builds the frontend, deploys Cloudflare Pages (`loopp-support`), safely rebuilds the Oracle API image via SSH (`deploy/remote_release.py`), then runs `deploy/smoke_test.sh` against https://loopp-support.pages.dev |
+
+Required GitHub Actions secrets (repository or `production` environment):
+
+- `CLOUDFLARE_ACCOUNT_ID`
+- `CLOUDFLARE_API_TOKEN` (Pages edit)
+- `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_PRIVATE_KEY` (optional `ORACLE_SSH_PORT`)
+
+The Oracle step backs up PostgreSQL, rebuilds **only** the API container, asserts existing refund receipts and unrelated containers are unchanged, and rolls back the API image if health checks fail. It never runs `docker compose down -v`. Pages production bindings (`PUBLIC_ORIGIN`, `API_ORIGIN`, `LOOPP_GATEWAY_SECRET`) stay in Cloudflare; they are not stored in Git.
+
+## Testing and evaluation
+
+### Backend regression (automated)
+
+**74** tests covering session isolation, tool recovery, ticket consent, refund ownership/eligibility/confirmation/idempotency, citation applicability, verifier modes, traces, and voice socket limits.
+
+```sh
+cd backend
 RUN_DB_TESTS=1 ../.venv/bin/python -m unittest discover -s tests -v
-RUN_DB_TESTS=0 DATABASE_URL=postgresql://unused:unused@127.0.0.1:1/no_database ../.venv/bin/python -m unittest discover -s tests -v
-RELEVANCE_VERIFIER=on ../.venv/bin/python eval_guardrail.py
-RELEVANCE_VERIFIER=on ../.venv/bin/python eval_guardrail.py --new-only
 ```
 
-From the repository root:
+### Live LLM agent evaluation (automated)
+
+Full pipeline against live Gemini on an isolated eval database. Methodology: [evaluation/README.md](evaluation/README.md).
+
+| Suite | Cases | Passed | Avg latency | Text-only cost sum | Artifact |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Primary | 80 | **80** | ~1970 ms | ~$0.092 | `evaluation/results/primary-final.json` |
+| Held-out | 12 | **12** | ~3123 ms | ~$0.021 | `evaluation/results/held_out-latest.json` |
+| Unseen | 8 | **8** | ~5622 ms | ~$0.016 | `evaluation/results/unseen-latest.json` |
+
+Intermediate reports retained for evidence of improvement: early primary **69/80**, mid **78/80**, held-out **11/12**, unseen **7/8**, then finals above.
+
+### Retrieval guardrails (automated, manual invocation)
 
 ```sh
-(cd frontend && npm run build)
+cd backend
+RELEVANCE_VERIFIER=on ../.venv/bin/python eval_guardrail.py
+```
+
+### Frontend production build
+
+```sh
+cd frontend && npm run build
+```
+
+### Manual voice validation
+
+Microphone, playback, mute, and spoken interruption are **not** covered by the suites above. Validate in the browser (local or live). Loom recording: pending.
+
+### Production smoke (optional)
+
+```sh
 ./deploy/smoke_test.sh https://loopp-support.pages.dev
 ```
 
-The smoke script checks readiness, session cookies, chat creation, and unauthenticated
-401 rejection. It makes no agent or refund requests. Automated checks do not
-establish physical microphone, speaker playback, mute, or interruption behavior;
-those require a manual browser check.
+Checks readiness, session cookies, and chat creation only — no agent or refund calls.
 
-## Model note
+## Known limitations
 
-Gemini 2.5 Flash-Lite is unavailable to new projects, so the app uses Gemini 3.5 Flash-Lite.
-Gemini Live remains the native speech integration.
-
-## Trade-offs and known limits
-
-- Records and financial actions are fictional. Demo email lookup is not authentication, and mock receipts do not transfer money.
-- Displayed cost is a text-only estimate. Missing Live audio and embedding costs remain unavailable; a complete session total is not fabricated.
-- Spoken refund confirmation is intentionally unsupported. Only the UI button calling the separate server-side endpoint can issue a mock receipt.
-- PostgreSQL performs an exact vector scan over 30 chunks from 15 versioned documents. This keeps retrieval simple for a small corpus; larger corpora would need a different indexing trade-off.
+- Fictional records only; mock receipts do not transfer money; email lookup is not real authentication.
+- Text-only cost estimates exclude Live audio and embeddings.
+- Spoken refund confirmation is unsupported by design.
+- Exact vector scan over a small corpus (~30 chunks); larger corpora would need different indexing.
+- Relevance verifier can reject some valid in-scope paraphrases (2/15 on the frozen set).
+- Physical voice UX depends on manual or Loom validation until the recording is attached.
+- A few social greetings remain lightly scripted (`social_reply`) before the model loop.
