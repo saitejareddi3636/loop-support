@@ -6,10 +6,11 @@ Mock refunds never move money. Demo email lookup is identity resolution for the 
 
 ## Live application and demonstration
 
-| Resource | Status |
+| Resource | Link |
 | --- | --- |
 | Live app | [https://loopp-support.pages.dev](https://loopp-support.pages.dev) |
-| Loom walkthrough | *Pending — recording not yet attached* |
+| Source repository | [https://github.com/saitejareddi3636/loop-support](https://github.com/saitejareddi3636/loop-support) |
+| Loom walkthrough | [https://www.loom.com/share/3e7bbabe038f47fcb52c6df0911aa6bd](https://www.loom.com/share/3e7bbabe038f47fcb52c6df0911aa6bd) |
 
 ## Demo accounts and example workflows
 
@@ -40,7 +41,7 @@ Aligned with the assessment requirements:
 - **Autonomous multi-step tools** — LangGraph selects among verify, account, invoice, list, policy search, mock refund staging, and escalation ticket creation by intent.
 - **Vector retrieval** — pgvector over section-aware policy chunks with version/tier/date filters.
 - **Confidence guardrails** — Similarity threshold, citation revalidation, optional relevance verifier, fail-closed escalation offers (no ticket without consent).
-- **Shared memory** — One `chat_id` and PostgreSQL-backed messages, context, receipts, and tickets across Chat and Voice.
+- **Shared memory** — One `chat_id` and PostgreSQL-backed messages, context, receipts, and tickets across Chat and Voice, with hydrate-on-switch so history survives mode changes and disconnects.
 - **Observability** — Prompt traces, tool timing, latency, text token usage, and text-only cost estimates in the Activity panel and persisted traces.
 - **Failure handling** — Retries with budgets for transient provider errors, rate limits, voice socket caps, and deterministic financial safeguards independent of model wording.
 
@@ -75,6 +76,8 @@ The system prompt frames a **general** support assistant, not a refund-only bot.
 
 **Conversation memory** includes verified account fields, selected invoice references, open tickets, and persisted mock receipts. After identity verification, the agent continues the customer’s earlier unresolved concern instead of resetting. Abandoned refund intents and topic changes are handled by intent-led tool choice plus compose rules that avoid volunteering refund cards.
 
+Chat↔Voice synchronization: in-flight text turns finish outside the HTTP cancel scope, and both UIs restore the shared chat from Postgres on mount so messages, receipts, and tool traces remain consistent after unmount or WebSocket disconnect.
+
 ## RAG, chunking, retrieval, and confidence guardrails
 
 Policy documents are split with section-aware chunking (roughly 180–300 estimated tokens, sentence overlap). Unchanged chunks reuse content-hashed 768-dimensional embeddings. Retrieval keeps active versions, filters by date and tier, ranks a small top-k, and revalidates citations against stored source text.
@@ -103,8 +106,8 @@ Text chat streams SSE events (model progress, tools, composed answer deltas). Fi
 | Check | Coverage |
 | --- | --- |
 | Backend WebSocket / session limits | Automated in the regression suite |
-| Shared chat↔voice `chat_id` and tool path | Automated + live LLM scenarios |
-| Microphone, speaker playback, mute, spoken barge-in | **Manual browser validation only** |
+| Shared chat↔voice `chat_id`, hydrate-on-switch, and tool path | Automated regression + live LLM scenarios |
+| Microphone, speaker playback, mute, spoken barge-in | Manual browser validation; demonstrated in the [Loom walkthrough](https://www.loom.com/share/3e7bbabe038f47fcb52c6df0911aa6bd) |
 
 ## Observability and failure handling
 
@@ -121,6 +124,7 @@ Displayed cost is a **text-only estimate**. Live audio and embedding costs are u
 | Challenge | Approach | Trade-off |
 | --- | --- | --- |
 | Context retention after verify | Inject verified account/receipts/tickets into model context; continue prior concern after identity | Slightly larger prompts; fewer redundant `get_account` calls |
+| Chat↔Voice history drift on mode switch | Persist turns beyond request cancel; hydrate shared chat from Postgres on Chat/Voice mount | Extra restore round-trip; avoids silent history loss |
 | Refund-assistant drift | Intent-separated tools, strip unsolicited refund offers in compose, UI refund cards only when choice is required | Occasional model attempts still occur; backend/UI block bad outcomes |
 | Wrong tool / failed policy wiping facts | Compose keeps invoice/account summaries when policy retrieval is not GROUNDED | May answer with structured facts plus an honest “policy not verified” note |
 | Retrieval relevance overlap | Threshold + citation checks + relevance verifier | Extra model call; two known in-scope false rejects on the frozen set |
@@ -180,7 +184,7 @@ The Oracle step backs up PostgreSQL, rebuilds **only** the API container, assert
 
 ### Backend regression (automated)
 
-**74** tests covering session isolation, tool recovery, ticket consent, refund ownership/eligibility/confirmation/idempotency, citation applicability, verifier modes, traces, and voice socket limits.
+**77** tests covering session isolation, chat↔voice conversation sync, tool recovery, ticket consent, refund ownership/eligibility/confirmation/idempotency, citation applicability, verifier modes, traces, and voice socket limits.
 
 ```sh
 cd backend
@@ -214,7 +218,7 @@ cd frontend && npm run build
 
 ### Manual voice validation
 
-Microphone, playback, mute, and spoken interruption are **not** covered by the suites above. Validate in the browser (local or live). Loom recording: pending.
+Microphone, playback, mute, and spoken interruption are **not** covered by the automated suites above. They were validated in the browser on the live app and are shown in the [Loom walkthrough](https://www.loom.com/share/3e7bbabe038f47fcb52c6df0911aa6bd) (waveform orb, transcripts, barge-in, and continuing the same conversation from Chat).
 
 ### Production smoke (optional)
 
@@ -231,5 +235,5 @@ Checks readiness, session cookies, and chat creation only — no agent or refund
 - Spoken refund confirmation is unsupported by design.
 - Exact vector scan over a small corpus (~30 chunks); larger corpora would need different indexing.
 - Relevance verifier can reject some valid in-scope paraphrases (2/15 on the frozen set).
-- Physical voice UX depends on manual or Loom validation until the recording is attached.
+- Physical voice UX (mic permissions, speaker playback, mute, spoken barge-in) is demonstrated in the Loom walkthrough rather than fully automated.
 - A few social greetings remain lightly scripted (`social_reply`) before the model loop.
