@@ -79,13 +79,17 @@ jobs:
           PORT="${ORACLE_SSH_PORT:-22}"
           SSH=(ssh -i "$KEY" -p "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes)
           SCP=(scp -i "$KEY" -P "$PORT" -o BatchMode=yes -o StrictHostKeyChecking=accept-new -o IdentitiesOnly=yes)
+          # Transfer only release artifacts; execution is confined to /opt/loopp-support.
           "${SCP[@]}" "/tmp/loopp-${SHORT}-source.tar.gz" \
             "${ORACLE_USER}@${ORACLE_HOST}:/tmp/loopp-${SHORT}-source.tar.gz"
           "${SCP[@]}" deploy/remote_release.py \
             "${ORACLE_USER}@${ORACLE_HOST}:/tmp/loopp-remote_release.py"
           "${SSH[@]}" "${ORACLE_USER}@${ORACLE_HOST}" \
-            "sudo install -m 700 /tmp/loopp-remote_release.py /opt/loopp-support/deploy/remote_release.py && \
-             sudo LOOPP_RELEASE_SHA='${GITHUB_SHA}' /usr/bin/python3 /opt/loopp-support/deploy/remote_release.py"
+            "test -d /opt/loopp-support && \
+             sudo install -d -m 700 /opt/loopp-support/deploy && \
+             sudo install -m 700 /tmp/loopp-remote_release.py /opt/loopp-support/deploy/remote_release.py && \
+             cd /opt/loopp-support && \
+             sudo env LOOPP_RELEASE_SHA='${GITHUB_SHA}' /usr/bin/python3 /opt/loopp-support/deploy/remote_release.py"
 
   smoke:
     name: Production smoke

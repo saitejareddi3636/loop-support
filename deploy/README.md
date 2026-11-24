@@ -87,19 +87,47 @@ Pushes to `main` run `.github/workflows/deploy.yml`:
 
 1. Frontend `npm ci && npm run build`
 2. Cloudflare Pages direct upload via Wrangler (`loopp-support`, branch `main`)
-3. Oracle host release through SSH + `deploy/remote_release.py` (API-only rebuild with DB backup and rollback)
+3. Oracle host release through a **dedicated deploy SSH key** + `deploy/remote_release.py`
+   (API-only rebuild under `/opt/loopp-support`, with DB backup and rollback)
 4. `deploy/smoke_test.sh https://loopp-support.pages.dev`
 
-Configure repository or `production` environment secrets: `CLOUDFLARE_ACCOUNT_ID`,
+Secrets (repository or `production` environment): `CLOUDFLARE_ACCOUNT_ID`,
 `CLOUDFLARE_API_TOKEN`, `ORACLE_HOST`, `ORACLE_USER`, `ORACLE_SSH_PRIVATE_KEY`
-(optional `ORACLE_SSH_PORT`). Without the Oracle SSH secrets, Pages still deploys
-and the Oracle step is skipped.
+(optional `ORACLE_SSH_PORT`).
 
-Manual fallback remains available: build the frontend with
-`cd frontend && npm ci && npm run build`, then
+The Oracle job never creates compute/network resources, never runs `docker compose down -v`,
+and does not modify NSG rules or legacy `loop-ai` containers. It only updates files under
+`/opt/loopp-support` and recreates the `loopp-support` API container.
+
+#### One-time SSH authorization (existing instance only)
+
+The GitHub Actions deploy key must appear in `ubuntu`'s `authorized_keys` on
+`129.80.125.203`. Do **not** open new public SSH CIDRs for this. Use the instance
+Cloud Shell connection you already have in the OCI Console:
+
+1. Compute → **Instances** → **instance-20261119-1343** → **Connect** → **Cloud Shell connection** (or Console connection).
+2. Sign in as `ubuntu` if prompted.
+3. Run:
+
+```sh
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+grep -qxF 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINOORs1hfwRaZSXX2jMkvdqcg+L9anuOk00xIDSVKwvt loopp-support-github-actions' ~/.ssh/authorized_keys \
+  || echo 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAINOORs1hfwRaZSXX2jMkvdqcg+L9anuOk00xIDSVKwvt loopp-support-github-actions' >> ~/.ssh/authorized_keys
+```
+
+4. Reply in the assessment chat that the key is authorized; the merge/deploy can then proceed.
+
+Optional least-privilege sudo (recommended once, still under `/opt/loopp-support` only):
+
+```sh
+echo 'ubuntu ALL=(root) NOPASSWD:SETENV: /usr/bin/python3 /opt/loopp-support/deploy/remote_release.py' | sudo tee /etc/sudoers.d/loopp-deploy
+sudo chmod 440 /etc/sudoers.d/loopp-deploy
+```
+
+Manual Pages fallback: `cd frontend && npm ci && npm run build`, then
 `npx wrangler pages deploy dist --project-name loopp-support --branch main`.
-Keep Pages production bindings (`PUBLIC_ORIGIN`, `API_ORIGIN`, `LOOPP_GATEWAY_SECRET`)
-in Cloudflare only.
+Keep Pages bindings in Cloudflare only.
 
 `/etc/cron.d/loopp-support` runs `deploy/maintain.sh` every six hours, writes
 protected PostgreSQL dumps under `backups/`, and retains seven days. This is
