@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityPanel, restoreTools, finishTool, Markdown, RefundCard, startTool, type PendingRefund, type Receipt, type ToolRun, type TraceEvent } from './Activity';
 import { InvoiceChoices, EmailCorrection, invoiceOptions, receiptFromResult, type InvoiceOption } from './ConversationActions';
+import { hydrateConversation, peekSharedChatId, rememberChatId, resolveSharedChatId } from './conversationSync';
 import { streamChat } from './streamChat';
 import SignalOrb, { type OrbState } from './SignalOrb';
 
@@ -68,23 +69,39 @@ export default function VoiceApp() {
   };
 
   useEffect(() => {
-    const id = localStorage.getItem('loopp-chat-id');
-    if (!id) return;
-    chatIdRef.current = id;
-    void fetch(`/api/chats/${id}`).then(async response => {
-      if (!response.ok) return;
-      const chat = await response.json() as { messages: { id: number; role: 'user' | 'assistant'; content: string }[]; refund_receipts?: Receipt[] };
-      setRefundReceipts(chat.refund_receipts || []);
-      setReceipt(chat.refund_receipts?.at(-1) || null);
-      setLines(chat.messages.map(message => ({ id: message.id, speaker: message.role, text: message.content })));
-      sequenceRef.current = Math.max(0, ...chat.messages.map(message => message.id));
-    }).catch(() => { /* Reconnect can still create a fresh chat. */ });
-    void fetch(`/api/chats/${id}/traces`).then(async response => {
-      if (response.ok) { const traces = await response.json() as { events: TraceEvent[] }[]; setListedInvoices(traces.map(trace => invoiceOptions(restoreTools(trace.events))).find(options => options.length) || []); if (traces[0]) { setNeedsEmail(traces[0].events.some(event => event.type === 'input_required' && event.field === 'email')); setEvents(traces[0].events); setTools(restoreTools(traces[0].events)); } }
-    }).catch(() => {});
-    void fetch(`/api/chats/${id}/refund-pending`).then(async response => {
-      if (response.ok) setPendingRefund(await response.json() as PendingRefund | null);
-    }).catch(() => { /* A missing pending request does not block voice. */ });
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const sharedId = await peekSharedChatId(controller.signal);
+        if (!sharedId || controller.signal.aborted) return;
+        chatIdRef.current = sharedId;
+        const apply = (chat: Awaited<ReturnType<typeof hydrateConversation>>) => {
+          if (!chat || controller.signal.aborted) return;
+          chatIdRef.current = chat.id;
+          setRefundReceipts(chat.refund_receipts);
+          setReceipt(chat.refund_receipts.at(-1) || null);
+          setLines(chat.messages.map(message => ({ id: message.id, speaker: message.role, text: message.content })));
+          sequenceRef.current = Math.max(0, ...chat.messages.map(message => message.id));
+          setListedInvoices(chat.traces.map(trace => invoiceOptions(restoreTools(trace.events))).find(options => options.length) || []);
+          const trace = chat.traces.find(item => item.events.some(event => event.type.startsWith('tool_'))) || chat.traces[0];
+          if (trace) {
+            setNeedsEmail(trace.events.some(event => event.type === 'input_required' && event.field === 'email'));
+            setEvents(trace.events);
+            setTools(restoreTools(trace.events));
+          } else {
+            setEvents([]);
+            setTools([]);
+          }
+          setPendingRefund(chat.pending);
+        };
+        const chat = await hydrateConversation(sharedId, controller.signal, { onUpdate: apply });
+        apply(chat);
+      } catch (cause) {
+        if (cause instanceof DOMException && cause.name === 'AbortError') return;
+        // Connect can still create or reopen the shared chat.
+      }
+    })();
+    return () => controller.abort();
   }, []);
 
   function clearPlayback() {
@@ -203,7 +220,7 @@ export default function VoiceApp() {
         if (message.type === 'ready') {
           setModel(message.model);
           chatIdRef.current = message.chat_id;
-          localStorage.setItem('loopp-chat-id', message.chat_id);
+          rememberChatId(message.chat_id);
           setState('ready');
         } else if (message.type === 'transcript') {
           addTranscript(message.speaker, message.text);
@@ -285,14 +302,32 @@ export default function VoiceApp() {
     manualCloseRef.current = false;
     setState('connecting');
     try {
-      let chatId = chatIdRef.current || localStorage.getItem('loopp-chat-id');
-      if (!chatId || !(await fetch(`/api/chats/${chatId}`)).ok) {
-        const created = await fetch('/api/chats', { method: 'POST' });
-        if (!created.ok) throw new Error('Could not create a shared chat.');
-        chatId = ((await created.json()) as { id: string }).id;
+      const resolved = await resolveSharedChatId();
+      const chatId = resolved.chatId;
+      if (!chatId) throw new Error('Could not open a shared chat.');
+      if (!resolved.created) {
+        const apply = (hydrated: Awaited<ReturnType<typeof hydrateConversation>>) => {
+          if (!hydrated) return;
+          setRefundReceipts(hydrated.refund_receipts);
+          setReceipt(hydrated.refund_receipts.at(-1) || null);
+          setLines(hydrated.messages.map(message => ({ id: message.id, speaker: message.role, text: message.content })));
+          sequenceRef.current = Math.max(0, ...hydrated.messages.map(message => message.id));
+          setListedInvoices(hydrated.traces.map(trace => invoiceOptions(restoreTools(trace.events))).find(options => options.length) || []);
+          const trace = hydrated.traces.find(item => item.events.some(event => event.type.startsWith('tool_'))) || hydrated.traces[0];
+          if (trace) {
+            setNeedsEmail(trace.events.some(event => event.type === 'input_required' && event.field === 'email'));
+            setEvents(trace.events);
+            setTools(restoreTools(trace.events));
+          } else {
+            setEvents([]);
+            setTools([]);
+          }
+          setPendingRefund(hydrated.pending);
+        };
+        apply(await hydrateConversation(chatId, undefined, { onUpdate: apply }));
       }
       chatIdRef.current = chatId;
-      localStorage.setItem('loopp-chat-id', chatId);
+      rememberChatId(chatId);
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });

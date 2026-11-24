@@ -63,6 +63,17 @@ def get_chat(chat_id, owner=None):
             chat["messages"] = db.execute(
                 "SELECT id,role,content FROM messages WHERE chat_id=%s ORDER BY id", (chat_id,)
             ).fetchall()
+            # Mode switches hydrate from Postgres; expose in-flight turns so clients can wait.
+            chat["active_turn"] = bool(
+                db.execute(
+                    "SELECT 1 FROM turn_requests WHERE chat_id=%s AND status='running' LIMIT 1",
+                    (chat_id,),
+                ).fetchone()
+                or db.execute(
+                    "SELECT 1 FROM voice_requests WHERE chat_id=%s AND status='running' LIMIT 1",
+                    (chat_id,),
+                ).fetchone()
+            )
         return chat
 
 

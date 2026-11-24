@@ -1,9 +1,11 @@
 """Chat HTTP and SSE routes. LangGraph and tools live in separate modules."""
 
+import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, HTTPException, Depends
+import anyio
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -16,6 +18,8 @@ from app.db import connect
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chats")
+# Fallback when lifespan task group is unavailable (unit tests).
+_turn_tasks: set[asyncio.Task] = set()
 
 
 class ChatInput(BaseModel):
@@ -31,6 +35,48 @@ class RefundConfirmation(BaseModel):
 
 def event(payload: dict) -> str:
     return f"data: {json.dumps(payload, default=str)}\n\n"
+
+
+def _spawn_turn(produce, turn_group=None):
+    """Run produce outside the HTTP request cancel scope when possible."""
+    if turn_group is not None:
+        turn_group.start_soon(produce)
+        return None
+    task = asyncio.create_task(produce())
+    _turn_tasks.add(task)
+    task.add_done_callback(_turn_tasks.discard)
+    return task
+
+
+async def iter_turn_events(
+    chat_id: str, prompt: str, key: str, request_id: str, turn_group=None
+):
+    """Yield run_turn events and finish Postgres writes even if the SSE client disconnects."""
+    queue: asyncio.Queue = asyncio.Queue()
+
+    async def produce():
+        try:
+            async for update in run_turn(chat_id, prompt, key, request_id):
+                await queue.put(("event", update))
+        except Exception as error:
+            await queue.put(("error", error))
+        finally:
+            await queue.put(("done", None))
+
+    task = _spawn_turn(produce, turn_group)
+    try:
+        while True:
+            kind, payload = await queue.get()
+            if kind == "done":
+                break
+            if kind == "error":
+                raise payload
+            yield payload
+    finally:
+        # Lifespan-hosted producers keep running after disconnect; fallback tasks need a wait.
+        if task is not None and not task.done():
+            with anyio.CancelScope(shield=True):
+                await task
 
 
 @router.get("")
@@ -52,7 +98,9 @@ def chat(chat_id: str, session: str = Depends(owner)):
 
 
 @router.post("/{chat_id}/messages")
-async def send_message(chat_id: str, body: ChatInput, session: str = Depends(owner)):
+async def send_message(
+    chat_id: str, body: ChatInput, request: Request, session: str = Depends(owner)
+):
     consume_quota(session)
     key = configured_api_key()
     if key is None:
@@ -63,12 +111,18 @@ async def send_message(chat_id: str, body: ChatInput, session: str = Depends(own
     prompt = body.message.strip()
     if not prompt:
         raise HTTPException(status_code=422, detail="Message cannot be empty")
+    turn_group = getattr(request.app.state, "turn_group", None)
 
     async def stream():
         try:
-            async for update in run_turn(chat_id, prompt, key, body.request_id):
+            async for update in iter_turn_events(
+                chat_id, prompt, key, body.request_id, turn_group=turn_group
+            ):
                 yield event(update)
-        except Exception as error:
+        except asyncio.CancelledError:
+            # Client navigated away (chat↔voice). Persistence continues in turn_group.
+            raise
+        except Exception:
             logger.exception("Chat stream failed")
             yield event(
                 {
