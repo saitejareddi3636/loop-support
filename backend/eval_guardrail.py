@@ -28,22 +28,54 @@ OUT_OF_SCOPE = (
 )
 
 
+# Fixed before the first verification run; do not tune the gate against these results.
+HELD_OUT_OF_SCOPE = (
+    ("Business", "Can I get a refund for my restaurant meal?"),
+    ("Pro", "Why did Netflix bill me twice this month?"),
+    ("Business", "Explain the late payment fee on my Amazon invoice."),
+    ("Pro", "Can you cancel my Spotify Premium subscription and refund the charge?"),
+    ("Business", "Can my landlord legally keep my security deposit?"),
+    ("Pro", "Draft a legal defense against this parking fine."),
+    ("Business", "Is this chest pain a heart attack or indigestion?"),
+    ("Pro", "Should I double my prescribed antibiotic dose today?"),
+    ("Business", "Hello there, how are you feeling today?"),
+    ("Pro", "Tell me a funny joke about penguins."),
+)
+
+
 def main():
     errors = 0
+    extrema = {}
     for label, queries, expected in [
-        ("in-scope", IN_SCOPE, True),
-        ("out-of-scope", OUT_OF_SCOPE, False),
+        ("original-in-scope", IN_SCOPE, True),
+        ("original-out-of-scope", OUT_OF_SCOPE, False),
+        ("held-out-out-of-scope", HELD_OUT_OF_SCOPE, False),
     ]:
-        passed = 0
+        before = after = 0
+        similarities = []
         print(f"\n{label}: expected {'GROUNDED' if expected else 'not GROUNDED'}", flush=True)
         for number, (tier, query) in enumerate(queries, 1):
             try:
+                # Both decisions use exactly the same retrieved vectors and passages.
                 result = search(query, tier)
-                ok = (result["decision"] == "GROUNDED") == expected
-                passed += ok
+                baseline = result.get("retrieval_decision", result["decision"])
+                verdict = result.get("relevance_verification", {}).get("verdict", "NOT_RUN")
+                before_ok = (baseline == "GROUNDED") == expected
+                # A failed verifier is a closed decision, but not a measured semantic success.
+                after_ok = (
+                    (result["decision"] == "GROUNDED") == expected
+                ) and verdict != "UNAVAILABLE"
+                before += before_ok
+                after += after_ok
                 similarity = result["top_similarity"]
+                if similarity is not None:
+                    similarities.append(similarity)
+                if verdict == "UNAVAILABLE":
+                    errors += 1
                 print(
-                    f"{number:02d} {'PASS' if ok else 'FAIL'} | similarity={similarity if similarity is not None else 'unavailable'} | threshold={result['threshold']} | decision={result['decision']} | tier={tier} | {query}",
+                    f"{number:02d} | similarity={similarity if similarity is not None else 'unavailable'} | "
+                    f"threshold={result['threshold']} | before={baseline} ({'PASS' if before_ok else 'FAIL'}) | "
+                    f"after={result['decision']} ({'PASS' if after_ok else 'FAIL'}) | relevance={verdict} | tier={tier} | {query}",
                     flush=True,
                 )
             except Exception as error:
@@ -53,9 +85,21 @@ def main():
                     flush=True,
                 )
         print(
-            f"{label} pass rate: {passed}/{len(queries)} ({100 * passed / len(queries):.1f}%)",
+            f"{label} before pass rate: {before}/{len(queries)} ({100 * before / len(queries):.1f}%)",
             flush=True,
         )
+        print(
+            f"{label} after pass rate: {after}/{len(queries)} ({100 * after / len(queries):.1f}%)",
+            flush=True,
+        )
+        extrema[label] = similarities
+    for name, operation, label in [
+        ("Max original out-of-scope", max, "original-out-of-scope"),
+        ("Min original in-scope", min, "original-in-scope"),
+        ("Max held-out out-of-scope", max, "held-out-out-of-scope"),
+    ]:
+        values = extrema[label]
+        print(f"{name} similarity: {operation(values) if values else 'unavailable'}", flush=True)
     return 1 if errors else 0
 
 

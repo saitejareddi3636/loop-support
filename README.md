@@ -25,7 +25,11 @@ hashes let unchanged chunks reuse their 768-dimensional Gemini embeddings.
 Search filters active versions, effective dates, and subscription tier, then
 ranks four matches using exact cosine search. The corpus is too small to need
 an approximate index. The threshold stays **0.68** and measures relevance,
-not answer correctness. Cited policy sentences are revalidated against sources;
+not answer correctness. A second, bounded yes/no model call must also verify
+that the retrieved passages address the actual Loopp request. A negative, malformed,
+or unavailable verdict returns the existing escalation decision without creating
+a ticket. The check cannot promote a below-threshold result or authorize refunds.
+Cited policy sentences are revalidated against sources;
 this restricts paraphrasing. Invoice facts come from SQL, not vector search.
 API cost reporting is a text-only estimate; missing costs remain unavailable.
 
@@ -87,20 +91,26 @@ receipts make refunds idempotent. Mutations are not automatically replayed.
 ## Guardrail evaluation
 
 From `backend/`, run `../.venv/bin/python eval_guardrail.py` after seeding policies.
-It sends 10 in-scope and 10 out-of-scope queries through `app.policy.search`
-with real embeddings, printing similarity, threshold, decision, and group pass
-rates. In-scope passes require GROUNDED; out-of-scope passes require rejection.
+It sends the original 10 in-scope and 10 out-of-scope queries plus 10 fixed
+held-out out-of-scope queries through `app.policy.search` with real embeddings.
+It reports retrieval-only and verified decisions on the same passages, each
+group's before/after pass rates, and similarity extrema. The second check uses
+Gemini 3.5 Flash-Lite with a ten-second timeout and no automatic retries. Provider
+failures fail closed but do not count as semantic evaluation successes. In-scope
+passes require GROUNDED; out-of-scope passes require rejection. This conservative
+check can reject valid questions when the retrieved passages are insufficient.
 This is a small retrieval check, not a measure of answer correctness. Record
 measured results below; no scores are prefilled.
 
-| Group | Queries | Passed | Pass rate |
+| Group | Queries | Before | After |
 | --- | --- | --- | --- |
-| In scope | 10 | | |
-| Out of scope | 10 | | |
+| Original in scope | 10 | | |
+| Original out of scope | 10 | | |
+| Held-out out of scope | 10 | | |
 
 ## Tests
 
-The focused suite contains 31 tests, including 19 database checks.
+The focused suite contains 37 tests, including 19 database checks.
 From `backend/`: `RUN_DB_TESTS=1 ../.venv/bin/python -m unittest discover -s tests -v`.
 Database tests create and remove a disposable database; the account needs that privilege.
 Use `RUN_DB_TESTS=0` for non-DB checks without a running database.

@@ -58,6 +58,10 @@ class HardeningTests(unittest.TestCase):
         self.clock = patch("app.refunds.date", DemoDate)
         self.clock.start()
         self.addCleanup(self.clock.stop)
+        # These DB invariants do not depend on a network relevance-model call.
+        self.relevance = patch("app.policy.assess_relevance", return_value={"verdict": "YES"})
+        self.relevance.start()
+        self.addCleanup(self.relevance.stop)
         self.chat = storage.create_chat(storage.session_id(storage.new_session()))["id"]
         storage.set_verified_customer(self.chat, "cus_1001")
 

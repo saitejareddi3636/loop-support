@@ -10,6 +10,7 @@ from google.genai import types
 from app.config import configured_api_key
 from app.db import connect as db
 from app.resilience import sync_lookup
+from app.policy_relevance import assess_relevance
 
 POLICIES_PATH = Path(__file__).resolve().parents[1] / "policies.json"
 EMBED_MODEL = "gemini-embedding-001"
@@ -280,17 +281,31 @@ def search(query, tier=None):
             tier,
             top=top,
         )
-    return decision(
-        "GROUNDED",
-        "Retrieved current, applicable passages above the threshold. Policy output is restricted to these source excerpts; similarity is relevance, not answer correctness.",
-        tier,
-        sources,
-        top,
-    )
+    verification = assess_relevance(query, tier, sources)
+    if verification.get("verdict") != "YES":
+        reason = (
+            "The retrieved passages do not address this request within Loopp support. Please clarify the Loopp policy or issue you need help with."
+            if verification.get("verdict") == "NO"
+            else "The additional policy relevance check is unavailable. I cannot ground this answer right now; please try again later."
+        )
+        result = decision("ESCALATION_REQUIRED", reason, tier, top=top)
+    else:
+        result = decision(
+            "GROUNDED",
+            "Retrieved current, applicable passages above the threshold and verified their relevance to this request. Policy output is restricted to these source excerpts; relevance does not establish answer correctness or refund eligibility.",
+            tier,
+            sources,
+            top,
+        )
+    result["retrieval_decision"] = "GROUNDED"
+    result["relevance_verification"] = verification
+    return result
 
 
 def validate_evidence(result):
     if result["decision"] != "GROUNDED":
+        return False
+    if result.get("relevance_verification", {"verdict": "YES"}).get("verdict") != "YES":
         return False
     for s in result["sources"]:
         if s["effective_date"] > date.today().isoformat() or (
